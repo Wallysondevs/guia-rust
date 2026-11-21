@@ -170,7 +170,7 @@ Err(Disconnected)</pre>
 <tr><td><code>try_recv()</code></td><td>volta na hora com <code>Err(Empty)</code>, ou <code>Err(Disconnected)</code> se fechou</td></tr>
 <tr><td><code>recv_timeout(d)</code></td><td>espera até <code>d</code>; depois <code>Err(Timeout)</code></td></tr>
 </table></div>
-<div class="note"><strong>sync_channel(n)</strong> cria um canal com espaço para no máximo <code>n</code> mensagens: quando ele enche, <code>send</code> espera. Útil para o produtor não andar muito à frente do consumidor.</div>
+<div class="note"><strong>sync_channel(n)</strong> Cria um canal com espaço para no máximo <code>n</code> mensagens: quando ele enche, <code>send</code> espera. Útil para o produtor não andar muito à frente do consumidor.</div>
 
 <hr>
 <h2>Exercícios</h2>

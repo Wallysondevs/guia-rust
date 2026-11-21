@@ -19,7 +19,7 @@
 <h1><span class="hl">async</span>/<span class="hl">await</span> básico</h1>
 
 <p class="intro">Threads são ótimas para trabalho pesado de CPU. Para programas que passam a maior parte do tempo <strong>esperando</strong> (rede, disco, temporizadores), o Rust oferece <code>async</code>/<code>await</code>: muitas tarefas podem esperar ao mesmo tempo sem uma thread para cada uma. Nesta aula você vai entender como isso funciona por dentro, usando só a biblioteca padrão.</p>
-<div class="note"><strong>A diferença do Rust</strong>: a linguagem traz <code>async</code>, <code>.await</code> e o trait <code>Future</code>, mas <strong>não</strong> traz um <em>executor</em> (quem roda as futures). Em projetos reais se usa um runtime pronto, como o <code>tokio</code>. Aqui vamos escrever um executor mínimo para ver as engrenagens.</div>
+<div class="note"><strong>A diferença do Rust</strong> A linguagem traz <code>async</code>, <code>.await</code> e o trait <code>Future</code>, mas <strong>não</strong> traz um <em>executor</em> (quem roda as futures). Em projetos reais se usa um runtime pronto, como o <code>tokio</code>. Aqui vamos escrever um executor mínimo para ver as engrenagens.</div>
 
 <hr>
 <h2>1. Uma future não faz nada sozinha</h2>

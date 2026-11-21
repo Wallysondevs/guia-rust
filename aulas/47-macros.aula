@@ -8,7 +8,7 @@ nivel: n3
 grupo: Rust Avançado
 ---
 <p class="intro">Você usa macros desde a primeira aula: <code>println!</code>, <code>vec!</code>, <code>assert_eq!</code>. Uma macro é código que <strong>escreve código</strong>: antes de compilar, o Rust troca a chamada pelo código que ela gera. Com <code>macro_rules!</code> você cria as suas, usando casamento de padrões parecido com o <code>match</code>.</p>
-<div class="note"><strong>Macro × função</strong>: uma macro recebe um número variável de argumentos, pode aceitar tipos e nomes (não só valores) e gera código na compilação. Mas é mais difícil de ler e de depurar. Se uma função resolve, prefira a função.</div>
+<div class="note"><strong>Macro × função</strong> Uma macro recebe um número variável de argumentos, pode aceitar tipos e nomes (não só valores) e gera código na compilação. Mas é mais difícil de ler e de depurar. Se uma função resolve, prefira a função.</div>
 
 <hr>
 <h2>1. A primeira macro</h2>

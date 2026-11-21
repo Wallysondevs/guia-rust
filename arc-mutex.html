@@ -208,7 +208,7 @@ fn main() {
      Running `target/debug/atomico`
 visitas: 4000</pre>
 <p>Para um número simples, <code>AtomicUsize</code>, <code>AtomicBool</code> e afins são mais leves que um <code>Mutex</code>.</p>
-<div class="note warn"><strong>Deadlock:</strong> o compilador impede corridas de dados, mas não impede <em>deadlock</em>. Se a thread A tranca o mutex 1 e espera o 2, enquanto a B tranca o 2 e espera o 1, as duas ficam paradas para sempre. Regra prática: segure a trava pelo menor tempo possível e tranque vários mutex sempre na mesma ordem.</div>
+<div class="note warn"><strong>Deadlock</strong> O compilador impede corridas de dados, mas não impede <em>deadlock</em>. Se a thread A tranca o mutex 1 e espera o 2, enquanto a B tranca o 2 e espera o 1, as duas ficam paradas para sempre. Regra prática: segure a trava pelo menor tempo possível e tranque vários mutex sempre na mesma ordem.</div>
 
 <hr>
 <h2>Exercícios</h2>

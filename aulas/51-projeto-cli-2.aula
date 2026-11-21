@@ -706,7 +706,7 @@ e descobre que tudo volta
 para o lugar de onde veio.
 :::
 <p>O executável <code>target/release/resumo</code> é um arquivo só, que roda sem o Rust instalado (em máquinas com o mesmo sistema). Para instalá-lo no seu <code>~/.cargo/bin</code> e chamá-lo de qualquer pasta como <code>resumo</code>, use <code>cargo install --path .</code>.</p>
-<div class="note"><strong>Para ir além</strong>: o crate <code>clap</code> gera parsing de argumentos com <code>--help</code> automático; <code>anyhow</code> simplifica o <code>Box&lt;dyn Error&gt;</code>. Adicione com <code>cargo add</code>, como na aula de <a href="crates.html">crates</a>.</div>
+<div class="note"><strong>Para ir além</strong> O crate <code>clap</code> gera parsing de argumentos com <code>--help</code> automático; <code>anyhow</code> simplifica o <code>Box&lt;dyn Error&gt;</code>. Adicione com <code>cargo add</code>, como na aula de <a href="crates.html">crates</a>.</div>
 
 <hr>
 <h2>Missões</h2>
