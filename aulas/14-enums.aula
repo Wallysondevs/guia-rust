@@ -1,0 +1,235 @@
+---
+slug: enums
+menu: Enums
+titulo: Enums em Rust — variantes com dados, impl em enum e Option | Guia Rust
+desc: Enums em Rust: tipos com variantes, variantes que carregam dados, métodos em enums, o enum Option<T> no lugar do null e o erro ao usar um Option como se fosse o valor.
+h1: <span class="hl">Enums</span>
+nivel: n1
+grupo: Structs e Enums
+---
+<p class="intro">Um <strong>enum</strong> (enumeração) é um tipo que pode ser <strong>uma</strong> entre várias possibilidades, chamadas <em>variantes</em>. Um semáforo é verde, amarelo ou vermelho; uma forma é um círculo ou um retângulo. Em Rust, cada variante pode carregar dados próprios, o que torna os enums muito mais poderosos que em C ou Java.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A declarar enums e criar valores com <code>Tipo::Variante</code>.</li>
+<li>Variantes com dados (como tupla ou como struct) e métodos em enums.</li>
+<li>O <code>Option&lt;T&gt;</code>, o jeito do Rust de dizer “pode não ter valor”, sem <code>null</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Um enum simples</h2>
+::: exemplo enum
+#[derive(Debug)]
+enum Semaforo {
+    Verde,
+    Amarelo,
+    Vermelho,
+}
+
+fn main() {
+    let agora = Semaforo::Amarelo;
+    let depois = Semaforo::Vermelho;
+    println!("{:?} -> {:?}", agora, depois);
+    println!("{:?}", Semaforo::Verde);
+}
+:::
+<p>Um valor do tipo <code>Semaforo</code> é sempre exatamente uma das três variantes. Para agir conforme a variante, usamos o <code>match</code> (próxima aula). Aqui vai uma prévia, porque enums e <code>match</code> andam juntos.</p>
+
+<hr>
+<h2>2. Variantes com dados</h2>
+::: exemplo enum-dados
+#[derive(Debug)]
+enum Forma {
+    Circulo(f64),
+    Retangulo { largura: f64, altura: f64 },
+    Ponto,
+}
+
+impl Forma {
+    fn area(&self) -> f64 {
+        match self {
+            Forma::Circulo(r) => 3.14159 * r * r,
+            Forma::Retangulo { largura, altura } => largura * altura,
+            Forma::Ponto => 0.0,
+        }
+    }
+}
+
+fn main() {
+    let formas = [
+        Forma::Circulo(1.0),
+        Forma::Retangulo { largura: 2.0, altura: 3.0 },
+        Forma::Ponto,
+    ];
+    for f in &formas {
+        println!("{:?}: área {:.2}", f, f.area());
+    }
+}
+:::
+<p><code>Circulo</code> carrega um <code>f64</code> (o raio), <code>Retangulo</code> carrega dois campos com nome, e <code>Ponto</code> não carrega nada. Todos são do mesmo tipo <code>Forma</code>, então cabem no mesmo array. E enums também têm <code>impl</code> e métodos.</p>
+
+<hr>
+<h2>3. <code>Option&lt;T&gt;</code>: um valor que pode não existir</h2>
+<p>Rust não tem <code>null</code>. Quando um valor pode faltar, o tipo é <code>Option&lt;T&gt;</code>, um enum da biblioteca padrão com duas variantes:</p>
+<pre class="syntax">enum Option&lt;T&gt; {
+    Some(T),  // tem um valor do tipo T
+    None,     // não tem valor
+}</pre>
+::: exemplo option
+fn dividir(a: f64, b: f64) -> Option<f64> {
+    if b == 0.0 {
+        None
+    } else {
+        Some(a / b)
+    }
+}
+
+fn main() {
+    let r1 = dividir(10.0, 4.0);
+    let r2 = dividir(1.0, 0.0);
+    println!("{:?} {:?}", r1, r2);
+    let numeros = [3, 8, 12];
+    println!("{:?}", numeros.iter().position(|&n| n == 8));
+    println!("{:?}", numeros.iter().position(|&n| n == 99));
+}
+:::
+<p>O <code>&lt;T&gt;</code> significa “de qualquer tipo”: <code>Option&lt;f64&gt;</code>, <code>Option&lt;String&gt;</code>… Muitas funções da biblioteca padrão devolvem <code>Option</code>, como <code>position</code>, que procura um item.</p>
+
+<hr>
+<h2>4. Quando dá errado: usar o <code>Option</code> como se fosse o valor</h2>
+::: exemplo option-erro falha
+fn main() {
+    let talvez: Option<i32> = Some(5);
+    let total = talvez + 1;
+    println!("{total}");
+}
+:::
+<p>Esse erro é o motivo de o <code>Option</code> existir. Um <code>Option&lt;i32&gt;</code> <strong>não é</strong> um <code>i32</code>: você é obrigado a tratar o caso <code>None</code> antes de usar o número. O “erro de um bilhão de dólares” (usar um nulo sem conferir) vira erro de compilação. Na aula de <a href="option.html">Option</a> do Nível 2 você vê todos os jeitos de abrir um <code>Option</code>; por enquanto, o <code>match</code>:</p>
+::: exemplo option-match
+fn main() {
+    let talvez: Option<i32> = Some(5);
+    let total = match talvez {
+        Some(n) => n + 1,
+        None => 0,
+    };
+    println!("{total}");
+}
+:::
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para criar a variante <code>Vermelho</code>:
+let s = Semaforo[[::]]Vermelho;
+:::
+::: ex
+Complete o tipo de retorno de uma função que pode não achar um nome:
+fn buscar(id: u32) -> [[Option<String>]] { None }
+:::
+::: mc 2
+Qual destas é uma variante válida de <code>Option&lt;i32&gt;</code>?
+- <code>Null</code>
+- <code>Some(7)</code>
+- <code>Ok(7)</code>
+- <code>Nothing</code>
+:::
+::: mc 4
+Por que <code>Some(5) + 1</code> não compila?
+- Porque 5 é pequeno demais
+- Porque falta <code>mut</code>
+- Porque <code>Option</code> só guarda texto
+- Porque um <code>Option&lt;i32&gt;</code> não é um <code>i32</code>: é preciso tratar o <code>None</code> antes
+:::
+::: missao goal="src:enum\s+Moeda;;src:Moeda::\w+;;out:Total: 77 centavos"
+Crie <code>enum Moeda { Um, Cinco, Dez, Cinquenta }</code> e um método <code>fn centavos(&amp;self) -&gt; u32</code> com <code>match</code>. Some as moedas <code>[Cinquenta, Dez, Dez, Cinco, Um, Um]</code> e imprima <code>Total: 77 centavos</code>.
+--- script
+fn main() {
+    println!("Total: 0 centavos");
+}
+--- solucao
+enum Moeda {
+    Um,
+    Cinco,
+    Dez,
+    Cinquenta,
+}
+
+impl Moeda {
+    fn centavos(&self) -> u32 {
+        match self {
+            Moeda::Um => 1,
+            Moeda::Cinco => 5,
+            Moeda::Dez => 10,
+            Moeda::Cinquenta => 50,
+        }
+    }
+}
+
+fn main() {
+    let bolso = [Moeda::Cinquenta, Moeda::Dez, Moeda::Dez, Moeda::Cinco, Moeda::Um, Moeda::Um];
+    let mut total = 0;
+    for m in &bolso {
+        total += m.centavos();
+    }
+    println!("Total: {total} centavos");
+}
+:::
+::: missao goal="src:->\s*Option<\w+>;;out:Some(4);;out:None"
+Escreva <code>fn raiz_inteira(n: i32) -&gt; Option&lt;i32&gt;</code>, que devolve <code>None</code> para números negativos e <code>Some(raiz)</code> quando <code>n</code> é um quadrado perfeito (teste de 0 até n). Imprima com <code>{:?}</code> o resultado para <code>16</code> (<code>Some(4)</code>) e para <code>-4</code> (<code>None</code>).
+--- script
+fn main() {
+}
+--- solucao
+fn raiz_inteira(n: i32) -> Option<i32> {
+    if n < 0 {
+        return None;
+    }
+    for r in 0..=n {
+        if r * r == n {
+            return Some(r);
+        }
+    }
+    None
+}
+
+fn main() {
+    println!("{:?}", raiz_inteira(16));
+    println!("{:?}", raiz_inteira(-4));
+}
+:::
+::: missao goal="src:enum\s+Mensagem;;src:Escrever\s*\(\s*String\s*\);;out:Mover para (3, 4);;out:Texto: oi"
+Crie <code>enum Mensagem { Sair, Mover { x: i32, y: i32 }, Escrever(String) }</code> com um método <code>fn mostrar(&amp;self)</code> que imprime <code>Sair</code>, <code>Mover para (x, y)</code> ou <code>Texto: …</code>. Mostre <code>Mover { x: 3, y: 4 }</code> e <code>Escrever("oi")</code>.
+--- script
+fn main() {
+}
+--- solucao
+enum Mensagem {
+    Sair,
+    Mover { x: i32, y: i32 },
+    Escrever(String),
+}
+
+impl Mensagem {
+    fn mostrar(&self) {
+        match self {
+            Mensagem::Sair => println!("Sair"),
+            Mensagem::Mover { x, y } => println!("Mover para ({x}, {y})"),
+            Mensagem::Escrever(t) => println!("Texto: {t}"),
+        }
+    }
+}
+
+fn main() {
+    let msgs = [Mensagem::Mover { x: 3, y: 4 }, Mensagem::Escrever(String::from("oi"))];
+    for m in &msgs {
+        m.mostrar();
+    }
+    let _ = Mensagem::Sair;
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>enum</code> define um tipo com variantes; um valor é sempre exatamente uma delas.</li>
+<li>Variantes podem carregar dados: <code>Circulo(f64)</code>, <code>Retangulo { largura, altura }</code>.</li>
+<li><code>Option&lt;T&gt;</code> (<code>Some(v)</code> ou <code>None</code>) substitui o <code>null</code> e obriga a tratar a ausência.</li>
+</ul>

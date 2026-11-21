@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enums em Rust — variantes com dados, impl em enum e Option | Guia Rust</title>
+<meta name="description" content="Enums em Rust: tipos com variantes, variantes que carregam dados, métodos em enums, o enum Option&lt;T&gt; no lugar do null e o erro ao usar um Option como se fosse o valor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Enums</span></h1>
+
+<p class="intro">Um <strong>enum</strong> (enumeração) é um tipo que pode ser <strong>uma</strong> entre várias possibilidades, chamadas <em>variantes</em>. Um semáforo é verde, amarelo ou vermelho; uma forma é um círculo ou um retângulo. Em Rust, cada variante pode carregar dados próprios, o que torna os enums muito mais poderosos que em C ou Java.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A declarar enums e criar valores com <code>Tipo::Variante</code>.</li>
+<li>Variantes com dados (como tupla ou como struct) e métodos em enums.</li>
+<li>O <code>Option&lt;T&gt;</code>, o jeito do Rust de dizer “pode não ter valor”, sem <code>null</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Um enum simples</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+enum Semaforo {
+    Verde,
+    Amarelo,
+    Vermelho,
+}
+
+fn main() {
+    let agora = Semaforo::Amarelo;
+    let depois = Semaforo::Vermelho;
+    println!("{:?} -&gt; {:?}", agora, depois);
+    println!("{:?}", Semaforo::Verde);
+}</pre>
+<pre class="term" data-cwd="~/projetos/enum">$ cargo run
+   Compiling enum v0.1.0 (/home/ana/projetos/enum)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/enum`
+Amarelo -&gt; Vermelho
+Verde</pre>
+<p>Um valor do tipo <code>Semaforo</code> é sempre exatamente uma das três variantes. Para agir conforme a variante, usamos o <code>match</code> (próxima aula). Aqui vai uma prévia, porque enums e <code>match</code> andam juntos.</p>
+
+<hr>
+<h2>2. Variantes com dados</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+enum Forma {
+    Circulo(f64),
+    Retangulo { largura: f64, altura: f64 },
+    Ponto,
+}
+
+impl Forma {
+    fn area(&amp;self) -&gt; f64 {
+        match self {
+            Forma::Circulo(r) =&gt; 3.14159 * r * r,
+            Forma::Retangulo { largura, altura } =&gt; largura * altura,
+            Forma::Ponto =&gt; 0.0,
+        }
+    }
+}
+
+fn main() {
+    let formas = [
+        Forma::Circulo(1.0),
+        Forma::Retangulo { largura: 2.0, altura: 3.0 },
+        Forma::Ponto,
+    ];
+    for f in &amp;formas {
+        println!("{:?}: área {:.2}", f, f.area());
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/enum-dados">$ cargo run
+   Compiling enum-dados v0.1.0 (/home/ana/projetos/enum-dados)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/enum-dados`
+Circulo(1.0): área 3.14
+Retangulo { largura: 2.0, altura: 3.0 }: área 6.00
+Ponto: área 0.00</pre>
+<p><code>Circulo</code> carrega um <code>f64</code> (o raio), <code>Retangulo</code> carrega dois campos com nome, e <code>Ponto</code> não carrega nada. Todos são do mesmo tipo <code>Forma</code>, então cabem no mesmo array. E enums também têm <code>impl</code> e métodos.</p>
+
+<hr>
+<h2>3. <code>Option&lt;T&gt;</code>: um valor que pode não existir</h2>
+<p>Rust não tem <code>null</code>. Quando um valor pode faltar, o tipo é <code>Option&lt;T&gt;</code>, um enum da biblioteca padrão com duas variantes:</p>
+<pre class="syntax">enum Option&lt;T&gt; {
+    Some(T),  // tem um valor do tipo T
+    None,     // não tem valor
+}</pre>
+<pre class="file" data-file="src/main.rs">fn dividir(a: f64, b: f64) -&gt; Option&lt;f64&gt; {
+    if b == 0.0 {
+        None
+    } else {
+        Some(a / b)
+    }
+}
+
+fn main() {
+    let r1 = dividir(10.0, 4.0);
+    let r2 = dividir(1.0, 0.0);
+    println!("{:?} {:?}", r1, r2);
+    let numeros = [3, 8, 12];
+    println!("{:?}", numeros.iter().position(|&amp;n| n == 8));
+    println!("{:?}", numeros.iter().position(|&amp;n| n == 99));
+}</pre>
+<pre class="term" data-cwd="~/projetos/option">$ cargo run
+   Compiling option v0.1.0 (/home/ana/projetos/option)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/option`
+Some(2.5) None
+Some(1)
+None</pre>
+<p>O <code>&lt;T&gt;</code> significa “de qualquer tipo”: <code>Option&lt;f64&gt;</code>, <code>Option&lt;String&gt;</code>… Muitas funções da biblioteca padrão devolvem <code>Option</code>, como <code>position</code>, que procura um item.</p>
+
+<hr>
+<h2>4. Quando dá errado: usar o <code>Option</code> como se fosse o valor</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let talvez: Option&lt;i32&gt; = Some(5);
+    let total = talvez + 1;
+    println!("{total}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/option-erro">$ cargo run
+   Compiling option-erro v0.1.0 (/home/ana/projetos/option-erro)
+error[E0369]: cannot add `{integer}` to `Option&lt;i32&gt;`
+ --&gt; src/main.rs:3:24
+  |
+3 |     let total = talvez + 1;
+  |                 ------ ^ - {integer}
+  |                 |
+  |                 Option&lt;i32&gt;
+  |
+note: `Option&lt;i32&gt;` does not implement `Add&lt;{integer}&gt;`
+ --&gt; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/option.rs:598:0
+  |
+  = note: `Option&lt;i32&gt;` is defined in another crate
+
+For more information about this error, try `rustc --explain E0369`.
+error: could not compile `option-erro` (bin "option-erro") due to 1 previous error</pre>
+<p>Esse erro é o motivo de o <code>Option</code> existir. Um <code>Option&lt;i32&gt;</code> <strong>não é</strong> um <code>i32</code>: você é obrigado a tratar o caso <code>None</code> antes de usar o número. O “erro de um bilhão de dólares” (usar um nulo sem conferir) vira erro de compilação. Na aula de <a href="option.html">Option</a> do Nível 2 você vê todos os jeitos de abrir um <code>Option</code>; por enquanto, o <code>match</code>:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let talvez: Option&lt;i32&gt; = Some(5);
+    let total = match talvez {
+        Some(n) =&gt; n + 1,
+        None =&gt; 0,
+    };
+    println!("{total}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/option-match">$ cargo run
+   Compiling option-match v0.1.0 (/home/ana/projetos/option-match)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/option-match`
+6</pre>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para criar a variante <code>Vermelho</code>:</p><div class="ex-code">let s = Semaforo<input data-answer="::" aria-label="resposta">Vermelho;</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o tipo de retorno de uma função que pode não achar um nome:</p><div class="ex-code">fn buscar(id: u32) -&gt; <input data-answer="Option&lt;String&gt;" aria-label="resposta"> { None }</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Qual destas é uma variante válida de <code>Option&lt;i32&gt;</code>?</p>
+<label><input type="radio" name="q1"> <code>Null</code></label>
+<label><input type="radio" name="q1"> <code>Some(7)</code></label>
+<label><input type="radio" name="q1"> <code>Ok(7)</code></label>
+<label><input type="radio" name="q1"> <code>Nothing</code></label></div>
+<div class="mc" data-answer="4"><p class="mc-q">Por que <code>Some(5) + 1</code> não compila?</p>
+<label><input type="radio" name="q2"> Porque 5 é pequeno demais</label>
+<label><input type="radio" name="q2"> Porque falta <code>mut</code></label>
+<label><input type="radio" name="q2"> Porque <code>Option</code> só guarda texto</label>
+<label><input type="radio" name="q2"> Porque um <code>Option&lt;i32&gt;</code> não é um <code>i32</code>: é preciso tratar o <code>None</code> antes</label></div>
+<div class="trycmd" data-goal="src:enum\s+Moeda;;src:Moeda::\w+;;out:Total: 77 centavos">
+<p class="try-task"><strong>Missão:</strong> Crie <code>enum Moeda { Um, Cinco, Dez, Cinquenta }</code> e um método <code>fn centavos(&amp;self) -&gt; u32</code> com <code>match</code>. Some as moedas <code>[Cinquenta, Dez, Dez, Cinco, Um, Um]</code> e imprima <code>Total: 77 centavos</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("Total: 0 centavos");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+enum Moeda {
+    Um,
+    Cinco,
+    Dez,
+    Cinquenta,
+}
+
+impl Moeda {
+    fn centavos(&amp;self) -&gt; u32 {
+        match self {
+            Moeda::Um =&gt; 1,
+            Moeda::Cinco =&gt; 5,
+            Moeda::Dez =&gt; 10,
+            Moeda::Cinquenta =&gt; 50,
+        }
+    }
+}
+
+fn main() {
+    let bolso = [Moeda::Cinquenta, Moeda::Dez, Moeda::Dez, Moeda::Cinco, Moeda::Um, Moeda::Um];
+    let mut total = 0;
+    for m in &amp;bolso {
+        total += m.centavos();
+    }
+    println!("Total: {total} centavos");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Total: 77 centavos
+</pre>
+</div>
+<div class="trycmd" data-goal="src:-&gt;\s*Option&lt;\w+&gt;;;out:Some(4);;out:None">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn raiz_inteira(n: i32) -&gt; Option&lt;i32&gt;</code>, que devolve <code>None</code> para números negativos e <code>Some(raiz)</code> quando <code>n</code> é um quadrado perfeito (teste de 0 até n). Imprima com <code>{:?}</code> o resultado para <code>16</code> (<code>Some(4)</code>) e para <code>-4</code> (<code>None</code>).</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn raiz_inteira(n: i32) -&gt; Option&lt;i32&gt; {
+    if n &lt; 0 {
+        return None;
+    }
+    for r in 0..=n {
+        if r * r == n {
+            return Some(r);
+        }
+    }
+    None
+}
+
+fn main() {
+    println!("{:?}", raiz_inteira(16));
+    println!("{:?}", raiz_inteira(-4));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Some(4)
+None
+</pre>
+</div>
+<div class="trycmd" data-goal="src:enum\s+Mensagem;;src:Escrever\s*\(\s*String\s*\);;out:Mover para (3, 4);;out:Texto: oi">
+<p class="try-task"><strong>Missão:</strong> Crie <code>enum Mensagem { Sair, Mover { x: i32, y: i32 }, Escrever(String) }</code> com um método <code>fn mostrar(&amp;self)</code> que imprime <code>Sair</code>, <code>Mover para (x, y)</code> ou <code>Texto: …</code>. Mostre <code>Mover { x: 3, y: 4 }</code> e <code>Escrever("oi")</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+enum Mensagem {
+    Sair,
+    Mover { x: i32, y: i32 },
+    Escrever(String),
+}
+
+impl Mensagem {
+    fn mostrar(&amp;self) {
+        match self {
+            Mensagem::Sair =&gt; println!("Sair"),
+            Mensagem::Mover { x, y } =&gt; println!("Mover para ({x}, {y})"),
+            Mensagem::Escrever(t) =&gt; println!("Texto: {t}"),
+        }
+    }
+}
+
+fn main() {
+    let msgs = [Mensagem::Mover { x: 3, y: 4 }, Mensagem::Escrever(String::from("oi"))];
+    for m in &amp;msgs {
+        m.mostrar();
+    }
+    let _ = Mensagem::Sair;
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Mover para (3, 4)
+Texto: oi
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>enum</code> define um tipo com variantes; um valor é sempre exatamente uma delas.</li>
+<li>Variantes podem carregar dados: <code>Circulo(f64)</code>, <code>Retangulo { largura, altura }</code>.</li>
+<li><code>Option&lt;T&gt;</code> (<code>Some(v)</code> ou <code>None</code>) substitui o <code>null</code> e obriga a tratar a ausência.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

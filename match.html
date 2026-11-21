@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>match em Rust — padrões, exaustividade, guardas, if let e let else | Guia Rust</title>
+<meta name="description" content="O match do Rust: comparar com padrões, a regra de cobrir todos os casos (E0004), o curinga _, faixas, |, guardas com if, desestruturação, if let, while let e let else.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">match</span> e if let</h1>
+
+<p class="intro">O <code>match</code> compara um valor com uma lista de <strong>padrões</strong> e executa o braço do primeiro que encaixar. Parece um <code>switch</code>, mas é bem mais forte: ele desmonta enums, tuplas e structs, aceita faixas e condições e, principalmente, o compilador confere se você cobriu <strong>todos</strong> os casos.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A sintaxe do <code>match</code> e o erro E0004 quando falta um caso.</li>
+<li>Padrões: curinga <code>_</code>, <code>|</code>, faixas <code>a..=b</code>, guardas <code>if</code> e desestruturação.</li>
+<li>Os atalhos <code>if let</code>, <code>while let</code> e <code>let … else</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. O básico</h2>
+<pre class="file" data-file="src/main.rs">fn nome_do_dia(n: u8) -&gt; &amp;'static str {
+    match n {
+        1 =&gt; "domingo",
+        2 =&gt; "segunda",
+        3 =&gt; "terça",
+        4 =&gt; "quarta",
+        5 =&gt; "quinta",
+        6 =&gt; "sexta",
+        7 =&gt; "sábado",
+        _ =&gt; "dia inválido",
+    }
+}
+
+fn main() {
+    println!("{}", nome_do_dia(1));
+    println!("{}", nome_do_dia(6));
+    println!("{}", nome_do_dia(9));
+}</pre>
+<pre class="term" data-cwd="~/projetos/match">$ cargo run
+   Compiling match v0.1.0 (/home/ana/projetos/match)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/match`
+domingo
+sexta
+dia inválido</pre>
+<dl class="anatomy"><dt>match n</dt><dd>o valor que vai ser comparado.</dd><dt>1 =&gt;</dt><dd>um padrão e a seta para o resultado.</dd><dt>"domingo",</dt><dd>o resultado do braço; braços separados por vírgula.</dd><dt>_ =&gt;</dt><dd>o curinga: “qualquer outra coisa”.</dd></dl>
+<p>O <code>match</code> é uma expressão: o valor do braço escolhido vira o valor do <code>match</code> inteiro.</p>
+
+<hr>
+<h2>2. Quando dá errado: faltou um caso</h2>
+<pre class="file" data-file="src/main.rs">enum Direcao {
+    Norte,
+    Sul,
+    Leste,
+    Oeste,
+}
+
+fn main() {
+    let d = Direcao::Leste;
+    let texto = match d {
+        Direcao::Norte =&gt; "cima",
+        Direcao::Sul =&gt; "baixo",
+        Direcao::Leste =&gt; "direita",
+    };
+    println!("{texto}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/match-erro">$ cargo run
+   Compiling match-erro v0.1.0 (/home/ana/projetos/match-erro)
+error[E0004]: non-exhaustive patterns: `Direcao::Oeste` not covered
+  --&gt; src/main.rs:10:23
+   |
+10 |     let texto = match d {
+   |                       ^ pattern `Direcao::Oeste` not covered
+   |
+note: `Direcao` defined here
+  --&gt; src/main.rs:1:6
+   |
+ 1 | enum Direcao {
+   |      ^^^^^^^
+...
+ 5 |     Oeste,
+   |     ----- not covered
+   = note: the matched value is of type `Direcao`
+help: ensure that all possible cases are being handled by adding a match arm with a wildcard pattern or an explicit pattern as shown
+   |
+13 ~         Direcao::Leste =&gt; "direita",
+14 ~         Direcao::Oeste =&gt; todo!(),
+   |
+
+For more information about this error, try `rustc --explain E0004`.
+error: could not compile `match-erro` (bin "match-erro") due to 1 previous error</pre>
+<p>Erro <strong>E0004</strong>, <em>non-exhaustive patterns</em>: o <code>match</code> precisa ser <strong>exaustivo</strong>. O compilador diz qual variante falta (<code>Oeste</code>) e sugere o braço. Isso é ótimo quando você acrescenta uma variante a um enum: todo <code>match</code> que esqueceu dela vira erro de compilação, em vez de bug escondido.</p>
+
+<hr>
+<h2>3. Padrões: <code>|</code>, faixas e guardas</h2>
+<pre class="file" data-file="src/main.rs">fn classificar(n: i32) -&gt; &amp;'static str {
+    match n {
+        0 =&gt; "zero",
+        1 | 2 | 3 =&gt; "pequeno",
+        4..=9 =&gt; "médio",
+        x if x &lt; 0 =&gt; "negativo",
+        x if x % 2 == 0 =&gt; "grande e par",
+        _ =&gt; "grande e ímpar",
+    }
+}
+
+fn main() {
+    for n in [0, 2, 7, -5, 40, 41] {
+        println!("{n}: {}", classificar(n));
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/padroes">$ cargo run
+   Compiling padroes v0.1.0 (/home/ana/projetos/padroes)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/padroes`
+0: zero
+2: pequeno
+7: médio
+-5: negativo
+40: grande e par
+41: grande e ímpar</pre>
+<p>O <code>|</code> junta padrões; <code>4..=9</code> é uma faixa; <code>x if …</code> dá um nome ao valor e acrescenta uma <strong>guarda</strong> (condição extra). Os braços são testados de cima para baixo.</p>
+
+<hr>
+<h2>4. Desestruturando tuplas, structs e enums</h2>
+<pre class="file" data-file="src/main.rs">struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn onde(p: &amp;Ponto) -&gt; String {
+    match p {
+        Ponto { x: 0, y: 0 } =&gt; String::from("na origem"),
+        Ponto { x: 0, y } =&gt; format!("no eixo y, em {y}"),
+        Ponto { x, y: 0 } =&gt; format!("no eixo x, em {x}"),
+        Ponto { x, y } =&gt; format!("em ({x}, {y})"),
+    }
+}
+
+fn main() {
+    println!("{}", onde(&amp;Ponto { x: 0, y: 0 }));
+    println!("{}", onde(&amp;Ponto { x: 0, y: 7 }));
+    println!("{}", onde(&amp;Ponto { x: 3, y: 4 }));
+    let par = (true, 10);
+    match par {
+        (true, n) =&gt; println!("ligado com {n}"),
+        (false, _) =&gt; println!("desligado"),
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/desestruturar">$ cargo run
+   Compiling desestruturar v0.1.0 (/home/ana/projetos/desestruturar)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/desestruturar`
+na origem
+no eixo y, em 7
+em (3, 4)
+ligado com 10</pre>
+
+<hr>
+<h2>5. <code>if let</code>: quando só um caso interessa</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let configuracao: Option&lt;u32&gt; = Some(8080);
+    if let Some(porta) = configuracao {
+        println!("usando a porta {porta}");
+    }
+    let vazio: Option&lt;u32&gt; = None;
+    if let Some(p) = vazio {
+        println!("porta {p}");
+    } else {
+        println!("sem porta configurada");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/if-let">$ cargo run
+   Compiling if-let v0.1.0 (/home/ana/projetos/if-let)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/if-let`
+usando a porta 8080
+sem porta configurada</pre>
+
+<hr>
+<h2>6. <code>while let</code> e <code>let … else</code></h2>
+<pre class="file" data-file="src/main.rs">fn ler_numero(texto: &amp;str) -&gt; u32 {
+    let Ok(n) = texto.parse::&lt;u32&gt;() else {
+        println!("'{texto}' não é número; usando 0");
+        return 0;
+    };
+    n
+}
+
+fn main() {
+    let mut pilha = vec![1, 2, 3];
+    while let Some(topo) = pilha.pop() {
+        println!("tirei {topo}");
+    }
+    println!("{}", ler_numero("42"));
+    println!("{}", ler_numero("abc"));
+}</pre>
+<pre class="term" data-cwd="~/projetos/while-let">$ cargo run
+   Compiling while-let v0.1.0 (/home/ana/projetos/while-let)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/while-let`
+tirei 3
+tirei 2
+tirei 1
+42
+'abc' não é número; usando 0
+0</pre>
+<p>O <code>while let</code> repete enquanto o padrão encaixar (o <code>pop</code> devolve <code>None</code> quando a pilha esvazia). O <code>let … else</code> desmonta o valor ou, se não encaixar, executa o <code>else</code>, que precisa sair da função (<code>return</code>, <code>break</code>…).</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete o padrão curinga:</p><div class="ex-code">match x { 1 =&gt; "um", <input data-answer="_" aria-label="resposta"> =&gt; "outro" }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o atalho para tratar só o <code>Some</code>:</p><div class="ex-code"><input data-answer="if let" aria-label="resposta"> Some(v) = talvez { println!("{v}"); }</div></div>
+<div class="mc" data-answer="1"><p class="mc-q">O que o erro E0004 indica?</p>
+<label><input type="radio" name="q1"> Que o <code>match</code> não cobre todos os casos possíveis</label>
+<label><input type="radio" name="q1"> Que há dois braços iguais</label>
+<label><input type="radio" name="q1"> Que falta ponto e vírgula</label>
+<label><input type="radio" name="q1"> Que o tipo do valor está errado</label></div>
+<div class="mc" data-answer="3"><p class="mc-q">Qual padrão casa com os números de 10 a 20, incluindo os dois?</p>
+<label><input type="radio" name="q2"> <code>10..20</code></label>
+<label><input type="radio" name="q2"> <code>10 | 20</code></label>
+<label><input type="radio" name="q2"> <code>10..=20</code></label>
+<label><input type="radio" name="q2"> <code>(10, 20)</code></label></div>
+<div class="trycmd" data-goal="src:\bmatch\b;;src:\d+\s*\.\.=\s*\d+;;out:7 -&gt; criança;;out:15 -&gt; adolescente;;out:40 -&gt; adulto">
+<p class="try-task"><strong>Missão:</strong> Com <code>match</code> e faixas <code>a..=b</code>, classifique idades: 0 a 12 <code>criança</code>, 13 a 17 <code>adolescente</code>, o resto <code>adulto</code>. Imprima para 7, 15 e 40 no formato <code>7 -&gt; criança</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    for idade in [7, 15, 40] {
+        println!("{idade} -&gt; ?");
+    }
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    for idade in [7, 15, 40] {
+        let fase = match idade {
+            0..=12 =&gt; "criança",
+            13..=17 =&gt; "adolescente",
+            _ =&gt; "adulto",
+        };
+        println!("{idade} -&gt; {fase}");
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+7 -&gt; criança
+15 -&gt; adolescente
+40 -&gt; adulto
+</pre>
+</div>
+<div class="trycmd" data-goal="src:Direcao::Oeste;;out:direita;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0004. Acrescente o braço que falta (<code>Direcao::Oeste =&gt; "esquerda"</code>) sem usar <code>_</code>, e rode.</p>
+<pre class="script" data-file="src/main.rs">
+enum Direcao {
+    Norte,
+    Sul,
+    Leste,
+    Oeste,
+}
+
+fn main() {
+    let d = Direcao::Leste;
+    let texto = match d {
+        Direcao::Norte =&gt; "cima",
+        Direcao::Sul =&gt; "baixo",
+        Direcao::Leste =&gt; "direita",
+    };
+    println!("{texto}");
+    let _ = (Direcao::Norte, Direcao::Sul, Direcao::Oeste);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+enum Direcao {
+    Norte,
+    Sul,
+    Leste,
+    Oeste,
+}
+
+fn main() {
+    let d = Direcao::Leste;
+    let texto = match d {
+        Direcao::Norte =&gt; "cima",
+        Direcao::Sul =&gt; "baixo",
+        Direcao::Leste =&gt; "direita",
+        Direcao::Oeste =&gt; "esquerda",
+    };
+    println!("{texto}");
+    let _ = (Direcao::Norte, Direcao::Sul, Direcao::Oeste);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+direita
+</pre>
+</div>
+<div class="trycmd" data-goal="src:while\s+let\s+Some;;out:fila: c;;out:fila: a;;out:fila vazia">
+<p class="try-task"><strong>Missão:</strong> Use <code>while let Some(x) = fila.pop()</code> para esvaziar <code>vec!["a", "b", "c"]</code>, imprimindo <code>fila: c</code>, <code>fila: b</code>, <code>fila: a</code> e, no fim, <code>fila vazia</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut fila = vec!["a", "b", "c"];
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut fila = vec!["a", "b", "c"];
+    while let Some(x) = fila.pop() {
+        println!("fila: {x}");
+    }
+    println!("fila vazia");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+fila: c
+fila: b
+fila: a
+fila vazia
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>match</code> testa padrões de cima para baixo e é uma expressão.</li>
+<li>Ele precisa cobrir todos os casos (E0004); <code>_</code> é o curinga.</li>
+<li>Padrões: literais, <code>|</code>, faixas <code>a..=b</code>, guardas <code>if</code> e desestruturação.</li>
+<li><code>if let</code>, <code>while let</code> e <code>let … else</code> são atalhos para um padrão só.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

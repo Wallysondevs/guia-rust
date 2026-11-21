@@ -28,7 +28,9 @@ var NIVEIS = [
     ]},
     { grupo: "Structs e Enums", itens: [
       ["structs.html", "Structs"],
-      ["metodos.html", "Métodos e impl"]
+      ["metodos.html", "Métodos e impl"],
+      ["enums.html", "Enums"],
+      ["match.html", "match e if let"]
     ]}
   ]}
 ];

@@ -1,0 +1,261 @@
+---
+slug: match
+menu: match e if let
+titulo: match em Rust — padrões, exaustividade, guardas, if let e let else | Guia Rust
+desc: O match do Rust: comparar com padrões, a regra de cobrir todos os casos (E0004), o curinga _, faixas, |, guardas com if, desestruturação, if let, while let e let else.
+h1: <span class="hl">match</span> e if let
+nivel: n1
+grupo: Structs e Enums
+---
+<p class="intro">O <code>match</code> compara um valor com uma lista de <strong>padrões</strong> e executa o braço do primeiro que encaixar. Parece um <code>switch</code>, mas é bem mais forte: ele desmonta enums, tuplas e structs, aceita faixas e condições e, principalmente, o compilador confere se você cobriu <strong>todos</strong> os casos.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A sintaxe do <code>match</code> e o erro E0004 quando falta um caso.</li>
+<li>Padrões: curinga <code>_</code>, <code>|</code>, faixas <code>a..=b</code>, guardas <code>if</code> e desestruturação.</li>
+<li>Os atalhos <code>if let</code>, <code>while let</code> e <code>let … else</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. O básico</h2>
+::: exemplo match
+fn nome_do_dia(n: u8) -> &'static str {
+    match n {
+        1 => "domingo",
+        2 => "segunda",
+        3 => "terça",
+        4 => "quarta",
+        5 => "quinta",
+        6 => "sexta",
+        7 => "sábado",
+        _ => "dia inválido",
+    }
+}
+
+fn main() {
+    println!("{}", nome_do_dia(1));
+    println!("{}", nome_do_dia(6));
+    println!("{}", nome_do_dia(9));
+}
+:::
+<dl class="anatomy"><dt>match n</dt><dd>o valor que vai ser comparado.</dd><dt>1 =&gt;</dt><dd>um padrão e a seta para o resultado.</dd><dt>"domingo",</dt><dd>o resultado do braço; braços separados por vírgula.</dd><dt>_ =&gt;</dt><dd>o curinga: “qualquer outra coisa”.</dd></dl>
+<p>O <code>match</code> é uma expressão: o valor do braço escolhido vira o valor do <code>match</code> inteiro.</p>
+
+<hr>
+<h2>2. Quando dá errado: faltou um caso</h2>
+::: exemplo match-erro falha
+enum Direcao {
+    Norte,
+    Sul,
+    Leste,
+    Oeste,
+}
+
+fn main() {
+    let d = Direcao::Leste;
+    let texto = match d {
+        Direcao::Norte => "cima",
+        Direcao::Sul => "baixo",
+        Direcao::Leste => "direita",
+    };
+    println!("{texto}");
+}
+:::
+<p>Erro <strong>E0004</strong>, <em>non-exhaustive patterns</em>: o <code>match</code> precisa ser <strong>exaustivo</strong>. O compilador diz qual variante falta (<code>Oeste</code>) e sugere o braço. Isso é ótimo quando você acrescenta uma variante a um enum: todo <code>match</code> que esqueceu dela vira erro de compilação, em vez de bug escondido.</p>
+
+<hr>
+<h2>3. Padrões: <code>|</code>, faixas e guardas</h2>
+::: exemplo padroes
+fn classificar(n: i32) -> &'static str {
+    match n {
+        0 => "zero",
+        1 | 2 | 3 => "pequeno",
+        4..=9 => "médio",
+        x if x < 0 => "negativo",
+        x if x % 2 == 0 => "grande e par",
+        _ => "grande e ímpar",
+    }
+}
+
+fn main() {
+    for n in [0, 2, 7, -5, 40, 41] {
+        println!("{n}: {}", classificar(n));
+    }
+}
+:::
+<p>O <code>|</code> junta padrões; <code>4..=9</code> é uma faixa; <code>x if …</code> dá um nome ao valor e acrescenta uma <strong>guarda</strong> (condição extra). Os braços são testados de cima para baixo.</p>
+
+<hr>
+<h2>4. Desestruturando tuplas, structs e enums</h2>
+::: exemplo desestruturar
+struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn onde(p: &Ponto) -> String {
+    match p {
+        Ponto { x: 0, y: 0 } => String::from("na origem"),
+        Ponto { x: 0, y } => format!("no eixo y, em {y}"),
+        Ponto { x, y: 0 } => format!("no eixo x, em {x}"),
+        Ponto { x, y } => format!("em ({x}, {y})"),
+    }
+}
+
+fn main() {
+    println!("{}", onde(&Ponto { x: 0, y: 0 }));
+    println!("{}", onde(&Ponto { x: 0, y: 7 }));
+    println!("{}", onde(&Ponto { x: 3, y: 4 }));
+    let par = (true, 10);
+    match par {
+        (true, n) => println!("ligado com {n}"),
+        (false, _) => println!("desligado"),
+    }
+}
+:::
+
+<hr>
+<h2>5. <code>if let</code>: quando só um caso interessa</h2>
+::: exemplo if-let
+fn main() {
+    let configuracao: Option<u32> = Some(8080);
+    if let Some(porta) = configuracao {
+        println!("usando a porta {porta}");
+    }
+    let vazio: Option<u32> = None;
+    if let Some(p) = vazio {
+        println!("porta {p}");
+    } else {
+        println!("sem porta configurada");
+    }
+}
+:::
+
+<hr>
+<h2>6. <code>while let</code> e <code>let … else</code></h2>
+::: exemplo while-let
+fn ler_numero(texto: &str) -> u32 {
+    let Ok(n) = texto.parse::<u32>() else {
+        println!("'{texto}' não é número; usando 0");
+        return 0;
+    };
+    n
+}
+
+fn main() {
+    let mut pilha = vec![1, 2, 3];
+    while let Some(topo) = pilha.pop() {
+        println!("tirei {topo}");
+    }
+    println!("{}", ler_numero("42"));
+    println!("{}", ler_numero("abc"));
+}
+:::
+<p>O <code>while let</code> repete enquanto o padrão encaixar (o <code>pop</code> devolve <code>None</code> quando a pilha esvazia). O <code>let … else</code> desmonta o valor ou, se não encaixar, executa o <code>else</code>, que precisa sair da função (<code>return</code>, <code>break</code>…).</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o padrão curinga:
+match x { 1 => "um", [[_]] => "outro" }
+:::
+::: ex
+Complete o atalho para tratar só o <code>Some</code>:
+[[if let]] Some(v) = talvez { println!("{v}"); }
+:::
+::: mc 1
+O que o erro E0004 indica?
+- Que o <code>match</code> não cobre todos os casos possíveis
+- Que há dois braços iguais
+- Que falta ponto e vírgula
+- Que o tipo do valor está errado
+:::
+::: mc 3
+Qual padrão casa com os números de 10 a 20, incluindo os dois?
+- <code>10..20</code>
+- <code>10 | 20</code>
+- <code>10..=20</code>
+- <code>(10, 20)</code>
+:::
+::: missao goal="src:\bmatch\b;;src:\d+\s*\.\.=\s*\d+;;out:7 -> criança;;out:15 -> adolescente;;out:40 -> adulto"
+Com <code>match</code> e faixas <code>a..=b</code>, classifique idades: 0 a 12 <code>criança</code>, 13 a 17 <code>adolescente</code>, o resto <code>adulto</code>. Imprima para 7, 15 e 40 no formato <code>7 -&gt; criança</code>.
+--- script
+fn main() {
+    for idade in [7, 15, 40] {
+        println!("{idade} -> ?");
+    }
+}
+--- solucao
+fn main() {
+    for idade in [7, 15, 40] {
+        let fase = match idade {
+            0..=12 => "criança",
+            13..=17 => "adolescente",
+            _ => "adulto",
+        };
+        println!("{idade} -> {fase}");
+    }
+}
+:::
+::: missao goal="src:Direcao::Oeste;;out:direita;;semerro"
+O programa abaixo dá E0004. Acrescente o braço que falta (<code>Direcao::Oeste =&gt; "esquerda"</code>) sem usar <code>_</code>, e rode.
+--- script
+enum Direcao {
+    Norte,
+    Sul,
+    Leste,
+    Oeste,
+}
+
+fn main() {
+    let d = Direcao::Leste;
+    let texto = match d {
+        Direcao::Norte => "cima",
+        Direcao::Sul => "baixo",
+        Direcao::Leste => "direita",
+    };
+    println!("{texto}");
+    let _ = (Direcao::Norte, Direcao::Sul, Direcao::Oeste);
+}
+--- solucao
+enum Direcao {
+    Norte,
+    Sul,
+    Leste,
+    Oeste,
+}
+
+fn main() {
+    let d = Direcao::Leste;
+    let texto = match d {
+        Direcao::Norte => "cima",
+        Direcao::Sul => "baixo",
+        Direcao::Leste => "direita",
+        Direcao::Oeste => "esquerda",
+    };
+    println!("{texto}");
+    let _ = (Direcao::Norte, Direcao::Sul, Direcao::Oeste);
+}
+:::
+::: missao goal="src:while\s+let\s+Some;;out:fila: c;;out:fila: a;;out:fila vazia"
+Use <code>while let Some(x) = fila.pop()</code> para esvaziar <code>vec!["a", "b", "c"]</code>, imprimindo <code>fila: c</code>, <code>fila: b</code>, <code>fila: a</code> e, no fim, <code>fila vazia</code>.
+--- script
+fn main() {
+    let mut fila = vec!["a", "b", "c"];
+}
+--- solucao
+fn main() {
+    let mut fila = vec!["a", "b", "c"];
+    while let Some(x) = fila.pop() {
+        println!("fila: {x}");
+    }
+    println!("fila vazia");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>match</code> testa padrões de cima para baixo e é uma expressão.</li>
+<li>Ele precisa cobrir todos os casos (E0004); <code>_</code> é o curinga.</li>
+<li>Padrões: literais, <code>|</code>, faixas <code>a..=b</code>, guardas <code>if</code> e desestruturação.</li>
+<li><code>if let</code>, <code>while let</code> e <code>let … else</code> são atalhos para um padrão só.</li>
+</ul>
