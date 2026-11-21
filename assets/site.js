@@ -12,7 +12,13 @@ var NIVEIS = [
       ["index.html", "Início"],
       ["introducao.html", "O que é Rust"],
       ["instalacao.html", "Instalando o Rust (rustup)"],
-      ["cargo.html", "Projetos com cargo"]
+      ["cargo.html", "Projetos com cargo"],
+      ["hello.html", "Olá, mundo e println!"]
+    ]},
+    { grupo: "Fundamentos", itens: [
+      ["variaveis.html", "Variáveis e mut"],
+      ["tipos.html", "Tipos de dados"],
+      ["funcoes.html", "Funções"]
     ]}
   ]}
 ];

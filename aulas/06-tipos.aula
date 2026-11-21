@@ -1,0 +1,213 @@
+---
+slug: tipos
+menu: Tipos de dados
+titulo: Tipos de dados em Rust — inteiros, float, bool, char, tuplas e arrays | Guia Rust
+desc: Os tipos escalares e compostos do Rust: i32, u8, usize, f64, bool, char, tuplas e arrays; anotação de tipo, conversão com as, overflow e o erro de índice fora do array.
+h1: Tipos de <span class="hl">dados</span>
+nivel: n1
+grupo: Fundamentos
+---
+<p class="intro">Rust é uma linguagem de <strong>tipagem estática</strong>: o compilador precisa saber o tipo de cada valor antes de rodar. Na maior parte das vezes ele descobre sozinho (isso se chama <em>inferência</em>), mas às vezes você precisa dizer. Nesta aula você conhece os tipos básicos.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Os tipos <strong>escalares</strong>: inteiros, ponto flutuante, <code>bool</code> e <code>char</code>.</li>
+<li>Os tipos <strong>compostos</strong>: tuplas e arrays.</li>
+<li>A conversar entre tipos com <code>as</code> e o que acontece num <em>overflow</em> ou num índice fora do array.</li>
+</ul></div>
+
+<hr>
+<h2>1. Inteiros</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Tamanho</th><th>Com sinal</th><th>Sem sinal</th></tr>
+<tr><td>8 bits</td><td><code>i8</code> (−128 a 127)</td><td><code>u8</code> (0 a 255)</td></tr>
+<tr><td>16 bits</td><td><code>i16</code></td><td><code>u16</code></td></tr>
+<tr><td>32 bits</td><td><code>i32</code> (o padrão)</td><td><code>u32</code></td></tr>
+<tr><td>64 bits</td><td><code>i64</code></td><td><code>u64</code></td></tr>
+<tr><td>128 bits</td><td><code>i128</code></td><td><code>u128</code></td></tr>
+<tr><td>do tamanho da máquina</td><td><code>isize</code></td><td><code>usize</code> (índices e tamanhos)</td></tr>
+</table></div>
+::: exemplo inteiros
+fn main() {
+    let a = 42;            // i32, o padrão
+    let b: u8 = 255;       // anotação de tipo
+    let c = 1_000_000i64;  // sufixo e separador _
+    let d = 0xff;          // hexadecimal
+    println!("{a} {b} {c} {d}");
+    println!("u8 vai de {} a {}", u8::MIN, u8::MAX);
+    println!("i32 vai até {}", i32::MAX);
+    println!("divisão inteira: {}, resto: {}", 7 / 2, 7 % 2);
+}
+:::
+<p>Repare: <code>7 / 2</code> com inteiros dá <code>3</code> (a parte fracionária é descartada). O <code>_</code> só ajuda a ler números grandes.</p>
+
+<hr>
+<h2>2. Ponto flutuante, <code>bool</code> e <code>char</code></h2>
+::: exemplo escalares
+fn main() {
+    let x = 2.5;           // f64, o padrão
+    let y: f32 = 1.0 / 3.0;
+    let ligado = true;
+    let letra = 'R';
+    let emoji = '🦀';
+    println!("{x} {y} {ligado} {letra} {emoji}");
+    println!("7.0 / 2.0 = {}", 7.0 / 2.0);
+    println!("raiz de 2 = {:.4}", 2.0_f64.sqrt());
+}
+:::
+<p>O <code>char</code> usa aspas simples e guarda <strong>um</strong> caractere Unicode (4 bytes), inclusive acentos e emojis. Texto, com aspas duplas, é outra coisa (<code>&amp;str</code> e <code>String</code>), que você vê nas aulas de slices e de strings.</p>
+
+<hr>
+<h2>3. Quando dá errado: misturar tipos</h2>
+::: exemplo mistura falha
+fn main() {
+    let inteiro = 10;
+    let fracao = 2.5;
+    println!("{}", inteiro + fracao);
+}
+:::
+<p>Rust não converte números sozinho: <code>i32 + f64</code> não existe. O <code>E0277</code> diz que não há implementação de soma de inteiro com float. Converta você mesmo com <code>as</code>:</p>
+::: exemplo as
+fn main() {
+    let inteiro = 10;
+    let fracao = 2.5;
+    println!("{}", inteiro as f64 + fracao);
+    println!("{}", 3.99_f64 as i32);
+    println!("{}", 300_i32 as u8);
+    println!("{}", 'A' as u8);
+}
+:::
+<p>Cuidado: <code>as</code> não arredonda (<code>3.99</code> vira <code>3</code>) e, ao caber num tipo menor, corta os bits (<code>300</code> vira <code>44</code>, porque 300 − 256 = 44).</p>
+
+<hr>
+<h2>4. Overflow: estourar o tamanho do tipo</h2>
+::: exemplo overflow falha
+fn main() {
+    let mut nivel: u8 = 250;
+    for _ in 0..10 {
+        nivel += 1;
+    }
+    println!("{nivel}");
+}
+:::
+<p>No perfil <code>dev</code>, o Rust confere estouros e o programa <strong>para</strong> com um <em>panic</em> (<code>attempt to add with overflow</code>), em vez de seguir com um número errado. Para escolher o comportamento, há métodos como <code>checked_add</code>, <code>wrapping_add</code> e <code>saturating_add</code>:</p>
+::: exemplo overflow-metodos
+fn main() {
+    let n: u8 = 250;
+    println!("{:?}", n.checked_add(10));
+    println!("{}", n.wrapping_add(10));
+    println!("{}", n.saturating_add(10));
+}
+:::
+
+<hr>
+<h2>5. Tuplas</h2>
+<p>Uma <strong>tupla</strong> agrupa valores de tipos diferentes, com tamanho fixo:</p>
+::: exemplo tuplas
+fn main() {
+    let pessoa: (&str, i32, f64) = ("Ana", 28, 1.65);
+    println!("nome: {}", pessoa.0);
+    let (nome, idade, altura) = pessoa;
+    println!("{nome} tem {idade} anos e {altura} m");
+    let vazio = ();
+    println!("{:?}", vazio);
+}
+:::
+<p>Acesse com <code>.0</code>, <code>.1</code>… ou <strong>desestruture</strong> com <code>let (a, b, c) = …</code>. A tupla vazia <code>()</code> se chama <em>unit</em>: é o “nada” que funções sem retorno devolvem.</p>
+
+<hr>
+<h2>6. Arrays</h2>
+::: exemplo arrays
+fn main() {
+    let notas = [7, 8, 10, 6];
+    let zeros = [0; 5];
+    let meses: [&str; 3] = ["jan", "fev", "mar"];
+    println!("primeira nota: {}", notas[0]);
+    println!("quantidade: {}", notas.len());
+    println!("{:?} {:?}", zeros, meses);
+}
+:::
+<p>Um array tem tamanho fixo e todos os elementos do mesmo tipo. O tipo se escreve <code>[tipo; tamanho]</code>. Para listas que crescem, use <code>Vec</code> (aula de coleções). E se você pedir um índice que não existe?</p>
+::: exemplo indice falha
+fn main() {
+    let notas = [7, 8, 10, 6];
+    let i = notas.len() + 2;
+    println!("{}", notas[i]);
+}
+:::
+<p>Panic: <code>index out of bounds</code>. O Rust confere o índice e para o programa em vez de ler memória que não é do array. Esse é um dos bugs que, em C, viram falhas de segurança.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o tipo inteiro sem sinal de 8 bits:
+let idade: [[u8]] = 30;
+:::
+::: ex
+Complete para converter o inteiro em <code>f64</code>:
+let media = soma [[as]] f64 / 3.0;
+:::
+::: mc 1
+Qual é o tipo inteiro padrão quando você escreve <code>let x = 5;</code>?
+- <code>i32</code>
+- <code>u8</code>
+- <code>i64</code>
+- <code>usize</code>
+:::
+::: mc 3
+O que acontece no perfil <code>dev</code> quando um <code>u8</code> passa de 255?
+- Ele vira 0 em silêncio
+- O compilador converte para <code>u16</code>
+- O programa para com um panic de overflow
+- Nada, o valor fica 256
+:::
+::: missao goal="src:as\s+f64;;out:Média: 7.75"
+Calcule a média das notas <code>7</code>, <code>8</code>, <code>10</code> e <code>6</code> (inteiros, num array) e imprima <code>Média: 7.75</code>. Você vai precisar converter a soma com <code>as f64</code>.
+--- script
+fn main() {
+    let notas = [7, 8, 10, 6];
+    let soma = notas[0] + notas[1] + notas[2] + notas[3];
+    println!("Média: {}", soma / 4);
+}
+--- solucao
+fn main() {
+    let notas = [7, 8, 10, 6];
+    let soma = notas[0] + notas[1] + notas[2] + notas[3];
+    println!("Média: {}", soma as f64 / 4.0);
+}
+:::
+::: missao goal="src:let\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=;;out:Cidade: Recife, população: 1488920"
+Crie a tupla <code>("Recife", 1488920)</code>, <strong>desestruture</strong> com <code>let (cidade, populacao) = …;</code> e imprima <code>Cidade: Recife, população: 1488920</code>.
+--- script
+fn main() {
+    let dados = ("Recife", 1488920);
+}
+--- solucao
+fn main() {
+    let dados = ("Recife", 1488920);
+    let (cidade, populacao) = dados;
+    println!("Cidade: {cidade}, população: {populacao}");
+}
+:::
+::: missao goal="src:saturating_add;;out:Volume: 255"
+O volume vai de 0 a 255 (<code>u8</code>). Aumente <code>volume</code> (que começa em 240) em 50 usando <code>saturating_add</code>, para não dar panic, e imprima <code>Volume: 255</code>.
+--- script
+fn main() {
+    let volume: u8 = 240;
+    let volume = volume + 50;
+    println!("Volume: {volume}");
+}
+--- solucao
+fn main() {
+    let volume: u8 = 240;
+    let volume = volume.saturating_add(50);
+    println!("Volume: {volume}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Inteiros (<code>i32</code> padrão, <code>u8</code>, <code>usize</code>…), floats (<code>f64</code> padrão), <code>bool</code> e <code>char</code> (Unicode).</li>
+<li>Rust não mistura tipos sozinho: converta com <code>as</code>, sabendo que ele trunca.</li>
+<li>Overflow e índice fora do array viram panic no modo <code>dev</code>, não bugs silenciosos.</li>
+<li>Tuplas agrupam tipos diferentes; arrays, valores do mesmo tipo com tamanho fixo.</li>
+</ul>

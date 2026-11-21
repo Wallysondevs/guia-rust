@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funções em Rust — parâmetros, retorno, expressões e blocos | Guia Rust</title>
+<meta name="description" content="Como declarar funções em Rust com fn, tipar parâmetros, devolver valores, a diferença entre instrução e expressão, o retorno sem ponto e vírgula e o erro E0308 que aparece quando ele sobra.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Funções</span></h1>
+
+<p class="intro">Funções dividem o programa em pedaços com nome. Em Rust elas são declaradas com <code>fn</code>, os parâmetros sempre têm tipo e o valor devolvido vem depois de uma seta <code>-&gt;</code>. O detalhe mais importante desta aula é pequeno: um <strong>ponto e vírgula</strong> a mais ou a menos muda o que a função devolve.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A declarar funções com parâmetros tipados e retorno.</li>
+<li>A diferença entre <strong>instrução</strong> e <strong>expressão</strong>.</li>
+<li>Por que <code>x + 1</code> devolve e <code>x + 1;</code> não, com o erro real.</li>
+</ul></div>
+
+<hr>
+<h2>1. Declarando e chamando</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    saudar("Ana");
+    saudar("Bruno");
+    mostrar_soma(3, 4);
+}
+
+fn saudar(nome: &amp;str) {
+    println!("Oi, {nome}!");
+}
+
+fn mostrar_soma(a: i32, b: i32) {
+    println!("{a} + {b} = {}", a + b);
+}</pre>
+<pre class="term" data-cwd="~/projetos/funcoes">$ cargo run
+   Compiling funcoes v0.1.0 (/home/ana/projetos/funcoes)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/funcoes`
+Oi, Ana!
+Oi, Bruno!
+3 + 4 = 7</pre>
+<p>A ordem não importa: <code>main</code> pode chamar funções declaradas depois dela. Nomes de função usam <em>snake_case</em> (minúsculas com <code>_</code>). Cada parâmetro precisa do tipo: <code>a: i32</code>.</p>
+
+<hr>
+<h2>2. Devolvendo valores</h2>
+<pre class="file" data-file="src/main.rs">fn dobro(x: i32) -&gt; i32 {
+    x * 2
+}
+
+fn area(largura: f64, altura: f64) -&gt; f64 {
+    largura * altura
+}
+
+fn main() {
+    let d = dobro(21);
+    println!("dobro: {d}");
+    println!("área: {}", area(2.5, 4.0));
+}</pre>
+<pre class="term" data-cwd="~/projetos/retorno">$ cargo run
+   Compiling retorno v0.1.0 (/home/ana/projetos/retorno)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/retorno`
+dobro: 42
+área: 10</pre>
+<dl class="anatomy"><dt>fn dobro</dt><dd>o nome.</dd><dt>(x: i32)</dt><dd>o parâmetro e seu tipo.</dd><dt>-&gt; i32</dt><dd>o tipo do valor devolvido.</dd><dt>x * 2</dt><dd>a última expressão, <strong>sem</strong> <code>;</code>, é o valor devolvido.</dd></dl>
+
+<hr>
+<h2>3. Instrução × expressão</h2>
+<p>Uma <strong>instrução</strong> faz algo e não produz valor (<code>let y = 6;</code>). Uma <strong>expressão</strong> produz um valor (<code>5 + 6</code>, uma chamada de função, um bloco <code>{ }</code>). O ponto e vírgula transforma uma expressão em instrução. Até um bloco tem valor:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let y = {
+        let x = 3;
+        x + 1
+    };
+    println!("y vale {y}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/blocos">$ cargo run
+   Compiling blocos v0.1.0 (/home/ana/projetos/blocos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/blocos`
+y vale 4</pre>
+
+<hr>
+<h2>4. Quando dá errado: o <code>;</code> que sobra</h2>
+<pre class="file" data-file="src/main.rs">fn mais_um(x: i32) -&gt; i32 {
+    x + 1;
+}
+
+fn main() {
+    println!("{}", mais_um(5));
+}</pre>
+<pre class="term" data-cwd="~/projetos/ponto-virgula">$ cargo run
+   Compiling ponto-virgula v0.1.0 (/home/ana/projetos/ponto-virgula)
+error[E0308]: mismatched types
+ --&gt; src/main.rs:1:23
+  |
+1 | fn mais_um(x: i32) -&gt; i32 {
+  |    -------            ^^^ expected `i32`, found `()`
+  |    |
+  |    implicitly returns `()` as its body has no tail or `return` expression
+2 |     x + 1;
+  |          - help: remove this semicolon to return this value
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `ponto-virgula` (bin "ponto-virgula") due to 1 previous error</pre>
+<p>Com o <code>;</code>, a última linha virou instrução, e o corpo não devolve nada (ou melhor, devolve <code>()</code>). Mas a assinatura promete um <code>i32</code>: erro <strong>E0308</strong>. A mensagem é ótima: ela diz <em>implicitly returns `()`</em> e sugere, no <code>help</code>, apagar o ponto e vírgula.</p>
+
+<hr>
+<h2>5. <code>return</code> antecipado</h2>
+<p>Para sair antes do fim, use <code>return</code>. Por estilo, só se usa <code>return</code> para saídas antecipadas; no fim, a expressão sem <code>;</code>.</p>
+<pre class="file" data-file="src/main.rs">fn classificar(nota: u32) -&gt; &amp;'static str {
+    if nota &gt;= 7 {
+        return "aprovado";
+    }
+    "recuperação"
+}
+
+fn main() {
+    println!("{}", classificar(9));
+    println!("{}", classificar(5));
+}</pre>
+<pre class="term" data-cwd="~/projetos/return">$ cargo run
+   Compiling return v0.1.0 (/home/ana/projetos/return)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/return`
+aprovado
+recuperação</pre>
+<p>O <code>&amp;'static str</code> é um texto fixo, escrito no programa. O <code>'static</code> é um <em>lifetime</em>, assunto do Nível 2. Por enquanto, leia como “texto que vive o programa inteiro”.</p>
+
+<hr>
+<h2>6. Devolvendo vários valores com tupla</h2>
+<pre class="file" data-file="src/main.rs">fn divisao(a: i32, b: i32) -&gt; (i32, i32) {
+    (a / b, a % b)
+}
+
+fn main() {
+    let (q, r) = divisao(17, 5);
+    println!("17 / 5 = {q}, resto {r}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/tupla-retorno">$ cargo run
+   Compiling tupla-retorno v0.1.0 (/home/ana/projetos/tupla-retorno)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/tupla-retorno`
+17 / 5 = 3, resto 2</pre>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete a assinatura de uma função que recebe e devolve <code>i32</code>:</p><div class="ex-code">fn triplo(x: i32) <input data-answer="-&gt; i32" aria-label="resposta"> {
+    x * 3
+}</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete com a palavra que sai antes do fim da função:</p><div class="ex-code">if n == 0 { <input data-answer="return" aria-label="resposta"> 0; }</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Por que <code>fn f() -&gt; i32 { 5; }</code> não compila?</p>
+<label><input type="radio" name="q1"> Porque 5 não é <code>i32</code></label>
+<label><input type="radio" name="q1"> Porque o <code>;</code> transforma a expressão em instrução, e a função passa a devolver <code>()</code></label>
+<label><input type="radio" name="q1"> Porque falta <code>return</code> sempre</label>
+<label><input type="radio" name="q1"> Porque funções não podem devolver números</label></div>
+<div class="mc" data-answer="1"><p class="mc-q">Qual destas é uma <strong>expressão</strong>?</p>
+<label><input type="radio" name="q2"> <code>a + b</code></label>
+<label><input type="radio" name="q2"> <code>let x = 5;</code></label>
+<label><input type="radio" name="q2"> <code>fn soma() {}</code></label>
+<label><input type="radio" name="q2"> <code>use std::io;</code></label></div>
+<div class="trycmd" data-goal="src:fn\s+quadrado\s*\(\s*\w+\s*:\s*i32\s*\)\s*-&gt;\s*i32;;out:O quadrado de 12 é 144">
+<p class="try-task"><strong>Missão:</strong> Escreva a função <code>fn quadrado(n: i32) -&gt; i32</code> e use-a em <code>main</code> para imprimir <code>O quadrado de 12 é 144</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("O quadrado de 12 é {}", 0);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn quadrado(n: i32) -&gt; i32 {
+    n * n
+}
+
+fn main() {
+    println!("O quadrado de 12 é {}", quadrado(12));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+O quadrado de 12 é 144
+</pre>
+</div>
+<div class="trycmd" data-goal="src:a\s*\+\s*b\s*$;;out:Soma: 30;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá o erro E0308 por causa de um ponto e vírgula. Conserte-o para imprimir <code>Soma: 30</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn somar(a: i32, b: i32) -&gt; i32 {
+    a + b;
+}
+
+fn main() {
+    println!("Soma: {}", somar(10, 20));
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn somar(a: i32, b: i32) -&gt; i32 {
+    a + b
+}
+
+fn main() {
+    println!("Soma: {}", somar(10, 20));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Soma: 30
+</pre>
+</div>
+<div class="trycmd" data-goal="src:-&gt;\s*\(\s*i32\s*,\s*i32\s*\);;out:Menor: 3, maior: 9">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn menor_maior(a: i32, b: i32) -&gt; (i32, i32)</code>, que devolve primeiro o menor e depois o maior. Chame com <code>(9, 3)</code> e imprima <code>Menor: 3, maior: 9</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let (menor, maior) = (0, 0);
+    println!("Menor: {menor}, maior: {maior}");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn menor_maior(a: i32, b: i32) -&gt; (i32, i32) {
+    if a &lt; b { (a, b) } else { (b, a) }
+}
+
+fn main() {
+    let (menor, maior) = menor_maior(9, 3);
+    println!("Menor: {menor}, maior: {maior}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Menor: 3, maior: 9
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>fn nome(p: Tipo) -&gt; Retorno { … }</code>; parâmetros sempre tipados.</li>
+<li>A última expressão <strong>sem</strong> <code>;</code> é o valor devolvido; <code>return</code> é para sair antes.</li>
+<li>Um <code>;</code> a mais faz a função devolver <code>()</code> e dá o erro E0308.</li>
+<li>Blocos <code>{ }</code> também são expressões e têm valor.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+---
+slug: hello
+menu: Olá, mundo e println!
+titulo: Olá, mundo em Rust — println!, print!, formatação e comentários | Guia Rust
+desc: O primeiro programa em Rust explicado linha a linha: fn main, println! e print!, marcadores {} e {:?}, largura, casas decimais, eprintln! e comentários.
+h1: Olá, mundo e <span class="hl">println!</span>
+nivel: n1
+grupo: Começando
+---
+<p class="intro">Todo programa Rust começa pela função <code>main</code>. Para mostrar algo na tela, usamos a macro <code>println!</code>, que imprime um texto e pula de linha. Nesta aula você aprende a imprimir textos, números e variáveis, a formatar a saída e a comentar o código.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A anatomia do <code>fn main()</code> e do <code>println!</code>.</li>
+<li>Os marcadores <code>{}</code>, <code>{nome}</code>, <code>{:?}</code>, largura e casas decimais.</li>
+<li>A diferença entre <code>print!</code>, <code>println!</code> e <code>eprintln!</code>, e os comentários <code>//</code> e <code>/* */</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. O programa mínimo</h2>
+::: exemplo hello
+fn main() {
+    println!("Olá, mundo!");
+}
+:::
+<dl class="anatomy"><dt>fn main()</dt><dd>a função principal; sem parâmetros.</dd><dt>{ … }</dt><dd>o corpo da função, entre chaves.</dd><dt>println!("…")</dt><dd>imprime o texto e pula linha.</dd><dt>;</dt><dd>fim da instrução.</dd></dl>
+<p>Rust usa 4 espaços de recuo por convenção. A ferramenta <code>cargo fmt</code> arruma o recuo automaticamente.</p>
+
+<hr>
+<h2>2. Marcadores: <code>{}</code></h2>
+<p>O primeiro argumento do <code>println!</code> é o <strong>texto de formato</strong>. Cada <code>{}</code> é trocado por um valor, na ordem. Você também pode escrever o nome de uma variável dentro das chaves.</p>
+::: exemplo marcadores
+fn main() {
+    let nome = "Ana";
+    let idade = 28;
+    println!("{} tem {} anos", nome, idade);
+    println!("{nome} tem {idade} anos");
+    println!("{0} e {1}; de novo {0}", "pão", "café");
+    println!("Chaves literais: {{ e }}");
+}
+:::
+<p>Para escrever uma chave de verdade, dobre: <code>{{</code> e <code>}}</code>.</p>
+
+<hr>
+<h2>3. Largura, alinhamento e casas decimais</h2>
+::: exemplo formatos
+fn main() {
+    let pi = 3.14159265;
+    println!("[{:.2}]", pi);
+    println!("[{:8.3}]", pi);
+    println!("[{:<8}]", "esq");
+    println!("[{:>8}]", "dir");
+    println!("[{:^8}]", "meio");
+    println!("[{:05}]", 42);
+    println!("{:b} {:x} {:o}", 10, 255, 8);
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Formato</th><th>Significado</th></tr>
+<tr><td><code>{:.2}</code></td><td>2 casas decimais</td></tr>
+<tr><td><code>{:8.3}</code></td><td>largura 8, 3 casas</td></tr>
+<tr><td><code>{:&lt;8}</code> <code>{:&gt;8}</code> <code>{:^8}</code></td><td>alinhar à esquerda, à direita, no centro</td></tr>
+<tr><td><code>{:05}</code></td><td>completar com zeros até 5 dígitos</td></tr>
+<tr><td><code>{:b}</code> <code>{:x}</code> <code>{:o}</code></td><td>binário, hexadecimal, octal</td></tr>
+</table></div>
+
+<hr>
+<h2>4. <code>{:?}</code>: o formato de depuração</h2>
+<p>Alguns valores, como listas, não têm um jeito “bonito” padrão de aparecer. Para eles existe o <code>{:?}</code> (Debug), e o <code>{:#?}</code>, que quebra em várias linhas:</p>
+::: exemplo debug
+fn main() {
+    let notas = [7, 9, 10];
+    let par = ("Ana", 28);
+    println!("{:?}", notas);
+    println!("{:?}", par);
+    println!("{:#?}", par);
+}
+:::
+
+<hr>
+<h2>5. <code>print!</code>, <code>eprintln!</code> e comentários</h2>
+::: exemplo prints
+// Comentário de linha: o compilador ignora.
+/* Comentário de bloco:
+   pode ocupar várias linhas. */
+fn main() {
+    print!("sem ");
+    print!("pular ");
+    println!("linha");
+    eprintln!("isto vai para a saída de erro (stderr)");
+}
+:::
+<p>O <code>print!</code> não pula linha. O <code>eprintln!</code> escreve na <em>saída de erro</em>: no terminal aparece igual, mas dá para separar com redirecionamento (<code>cargo run 2&gt; erros.txt</code>). Comentários com <code>///</code> são de documentação e aparecem no <code>cargo doc</code>.</p>
+
+<hr>
+<h2>Quando dá errado</h2>
+<p>Se o número de <code>{}</code> não bate com o número de valores, o código nem compila:</p>
+::: exemplo erro-args falha
+fn main() {
+    println!("{} e {}", "um");
+}
+:::
+<p>O compilador conta os marcadores: dois <code>{}</code> e um só argumento. Muitas linguagens só descobririam isso na hora de rodar.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para imprimir o valor com 2 casas decimais:
+println!("{[[:.2]]}", 9.876);
+:::
+::: ex
+Complete com o marcador de depuração para imprimir a lista:
+println!("[[{:?}]]", [1, 2, 3]);
+:::
+::: mc 2
+O que imprime <code>print!("a"); print!("b");</code>?
+- <code>a</code> e <code>b</code> em linhas separadas
+- <code>ab</code> na mesma linha
+- Um erro de compilação
+- Nada
+:::
+::: mc 3
+Como escrever uma chave <code>{</code> literal dentro do <code>println!</code>?
+- <code>\{</code>
+- <code>'{'</code>
+- <code>{{</code>
+- Não é possível
+:::
+::: missao goal="src:\{:\.3\}|\{[a-z_]*:\.3\};;out:Pi vale 3.142"
+Imprima <code>Pi vale 3.142</code> a partir da variável <code>pi</code>, usando o formato de <strong>3 casas decimais</strong> (não escreva o número à mão).
+--- script
+fn main() {
+    let pi = 3.14159;
+    // imprima com 3 casas
+}
+--- solucao
+fn main() {
+    let pi = 3.14159;
+    println!("Pi vale {:.3}", pi);
+}
+:::
+::: missao goal="src:\{:\?\}|\{[a-z_]+:\?\};;src:\{:>|:>\d;;outre:^\s+Ana$;;out:[10, 20, 30]"
+Duas tarefas num programa só: imprima o nome <code>Ana</code> alinhado à direita numa largura de 10 (<code>{:&gt;10}</code>) e, na linha seguinte, a lista <code>[10, 20, 30]</code> com o formato de depuração.
+--- script
+fn main() {
+    let nome = "Ana";
+    let lista = [10, 20, 30];
+}
+--- solucao
+fn main() {
+    let nome = "Ana";
+    let lista = [10, 20, 30];
+    println!("{:>10}", nome);
+    println!("{:?}", lista);
+}
+:::
+::: missao goal="src:print!\(;;out:1 2 3 fim"
+Use <strong>três</strong> <code>print!</code> e um <code>println!</code> para imprimir <code>1 2 3 fim</code> numa linha só.
+--- script
+fn main() {
+    println!("1");
+    println!("2");
+    println!("3");
+    println!("fim");
+}
+--- solucao
+fn main() {
+    print!("1 ");
+    print!("2 ");
+    print!("3 ");
+    println!("fim");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>println!</code> imprime e pula linha; <code>print!</code> não pula; <code>eprintln!</code> vai para a saída de erro.</li>
+<li><code>{}</code> mostra o valor; <code>{nome}</code> usa uma variável; <code>{:?}</code> é o formato de depuração.</li>
+<li><code>{:.2}</code>, <code>{:&gt;8}</code>, <code>{:05}</code> controlam casas, alinhamento e zeros.</li>
+<li>Marcadores e argumentos são conferidos na compilação.</li>
+</ul>

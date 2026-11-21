@@ -1,0 +1,178 @@
+---
+slug: variaveis
+menu: Variáveis e mut
+titulo: Variáveis em Rust — let, mut, shadowing e const | Guia Rust
+desc: Variáveis em Rust são imutáveis por padrão. Veja let, mut, o erro E0384, shadowing (sombreamento), constantes com const e o que acontece com variáveis não usadas.
+h1: Variáveis e <span class="hl">mut</span>
+nivel: n1
+grupo: Fundamentos
+---
+<p class="intro">Em Rust, uma variável criada com <code>let</code> é <strong>imutável</strong> por padrão: depois de receber um valor, não muda mais. Para poder mudar, você pede explicitamente com <code>mut</code>. Parece estranho no começo, mas deixa o código mais fácil de entender: quem lê sabe na hora quais valores mudam.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li><code>let</code>, <code>let mut</code> e o erro real quando você tenta mudar uma variável imutável.</li>
+<li>O <em>shadowing</em> (sombreamento): criar uma nova variável com o mesmo nome.</li>
+<li>Constantes com <code>const</code> e a diferença para <code>let</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>let</code>: imutável por padrão</h2>
+::: exemplo let
+fn main() {
+    let x = 5;
+    println!("x vale {x}");
+}
+:::
+<p>Agora tente mudar o valor:</p>
+::: exemplo let-erro falha
+fn main() {
+    let x = 5;
+    println!("x vale {x}");
+    x = 6;
+    println!("x vale {x}");
+}
+:::
+<p>Este é o erro <strong>E0384</strong>: <em>cannot assign twice to immutable variable</em> (não dá para atribuir duas vezes a uma variável imutável). O compilador aponta a primeira atribuição, a segunda, e na linha <code>help</code> diz exatamente o que fazer: colocar <code>mut</code>. Para ler a explicação completa de qualquer erro, use <code>rustc --explain E0384</code>.</p>
+
+<hr>
+<h2>2. <code>let mut</code>: quando precisa mudar</h2>
+::: exemplo mut
+fn main() {
+    let mut pontos = 0;
+    println!("início: {pontos}");
+    pontos = pontos + 10;
+    pontos += 5;
+    println!("fim: {pontos}");
+}
+:::
+<p>O <code>+=</code> é um atalho para <code>pontos = pontos + 5</code>. Também existem <code>-=</code>, <code>*=</code>, <code>/=</code> e <code>%=</code>. Rust não tem <code>++</code> nem <code>--</code>.</p>
+
+<hr>
+<h2>3. Shadowing: o mesmo nome, uma variável nova</h2>
+<p>Você pode declarar <code>let</code> de novo com o mesmo nome. A nova variável “faz sombra” na antiga. Diferente de <code>mut</code>, o shadowing pode até <strong>trocar o tipo</strong>:</p>
+::: exemplo shadowing
+fn main() {
+    let espacos = "   ";
+    let espacos = espacos.len();
+    println!("quantidade de espaços: {espacos}");
+
+    let x = 5;
+    {
+        let x = x * 2;
+        println!("dentro do bloco: {x}");
+    }
+    println!("fora do bloco: {x}");
+}
+:::
+<p>Dentro do bloco <code>{ }</code>, o <code>x</code> novo vale 10. Quando o bloco termina, ele some, e o <code>x</code> de fora (5) volta a valer. Com <code>mut</code> não daria para trocar texto por número:</p>
+::: exemplo mut-tipo falha
+fn main() {
+    let mut espacos = "   ";
+    espacos = espacos.len();
+    println!("{espacos}");
+}
+:::
+<p>Erro <strong>E0308</strong>, <em>mismatched types</em> (tipos que não combinam): a variável foi criada como texto (<code>&amp;str</code>) e o <code>len()</code> devolve um número (<code>usize</code>). Uma variável <code>mut</code> muda de valor, nunca de tipo.</p>
+
+<hr>
+<h2>4. Constantes: <code>const</code></h2>
+::: exemplo const
+const SEGUNDOS_POR_HORA: u32 = 60 * 60;
+
+fn main() {
+    let horas = 3;
+    println!("{} segundos", horas * SEGUNDOS_POR_HORA);
+}
+:::
+<ul>
+<li>Constantes usam <code>const</code>, nunca <code>mut</code>, e o tipo é <strong>obrigatório</strong> (aqui, <code>u32</code>).</li>
+<li>O nome vai em MAIÚSCULAS_COM_SUBLINHADO, por convenção.</li>
+<li>Podem ficar fora de funções e valem para o arquivo inteiro.</li>
+<li>O valor precisa ser calculável na compilação.</li>
+</ul>
+
+<hr>
+<h2>5. Variável não usada: aviso, não erro</h2>
+::: exemplo nao-usada
+fn main() {
+    let total = 100;
+    let _rascunho = 7;
+    println!("{total}");
+}
+:::
+<p>Nenhum aviso aqui: começar o nome com <code>_</code> diz ao compilador “eu sei que não uso esta variável”. Sem o <code>_</code>, ele avisaria com <code>unused variable</code>, como você viu na aula do cargo.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para que <code>vidas</code> possa mudar:
+let [[mut]] vidas = 3;
+vidas -= 1;
+:::
+::: ex
+Complete a declaração da constante:
+[[const]] MAXIMO: u32 = 100;
+:::
+::: mc 2
+Qual a diferença principal entre <code>mut</code> e shadowing?
+- Nenhuma, são a mesma coisa
+- Com shadowing você cria uma variável nova e pode até trocar o tipo; com <code>mut</code> só o valor muda
+- <code>mut</code> só funciona com números
+- Shadowing só funciona dentro de <code>main</code>
+:::
+::: mc 4
+O que o erro E0384 quer dizer?
+- O tipo está errado
+- A variável não foi declarada
+- Falta ponto e vírgula
+- Você atribuiu duas vezes a uma variável imutável
+:::
+::: missao goal="src:let\s+mut\s+saldo;;out:Saldo final: 150;;semerro"
+O programa abaixo não compila (é o erro E0384). Conserte-o para que imprima <code>Saldo final: 150</code>.
+--- script
+fn main() {
+    let saldo = 100;
+    saldo += 50;
+    println!("Saldo final: {saldo}");
+}
+--- solucao
+fn main() {
+    let mut saldo = 100;
+    saldo += 50;
+    println!("Saldo final: {saldo}");
+}
+:::
+::: missao goal="src:let\s+texto\s*=\s*\x22[^\x22]*\x22;;src:let\s+texto\s*=\s*texto\.len\(\);;out:Tamanho: 4"
+Use <strong>shadowing</strong>: crie <code>let texto = "Rust";</code> e, na linha seguinte, uma nova variável <code>texto</code> com o tamanho dele (<code>texto.len()</code>). Imprima <code>Tamanho: 4</code>.
+--- script
+fn main() {
+    let texto = "Rust";
+}
+--- solucao
+fn main() {
+    let texto = "Rust";
+    let texto = texto.len();
+    println!("Tamanho: {texto}");
+}
+:::
+::: missao goal="src:const\s+[A-Z_]+\s*:\s*u32;;out:Uma semana tem 10080 minutos"
+Crie uma constante <code>MINUTOS_POR_DIA: u32</code> com o valor <code>24 * 60</code> e use-a para imprimir <code>Uma semana tem 10080 minutos</code>.
+--- script
+fn main() {
+    println!("Uma semana tem ? minutos");
+}
+--- solucao
+const MINUTOS_POR_DIA: u32 = 24 * 60;
+
+fn main() {
+    println!("Uma semana tem {} minutos", 7 * MINUTOS_POR_DIA);
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>let</code> cria variável imutável; <code>let mut</code>, mutável.</li>
+<li>Mudar uma variável imutável é o erro E0384; o <code>help</code> sugere o <code>mut</code>.</li>
+<li>Shadowing (<code>let</code> de novo) cria uma variável nova e pode trocar o tipo.</li>
+<li><code>const</code> exige tipo, usa MAIÚSCULAS e vale na compilação.</li>
+</ul>

@@ -48,7 +48,7 @@ fi
 falhou=0
 for pad0 in "${padroes[@]}"; do
   if [[ "$pad0" == re:* ]]; then pad="${pad0#re:}"; opt=(-P -i); else pad="$pad0"; opt=(-F -i); fi
-  achou=$(grep -rn "${opt[@]}" --include='*.html' --include='*.js' --include='*.md' --include='*.css' --include='*.txt' --exclude-dir=.git --exclude-dir=_saidas -e "$pad" . | head -5)
+  achou=$(grep -rn "${opt[@]}" --include='*.html' --include='*.js' --include='*.md' --include='*.css' --include='*.txt' --include='*.aula' --include='*.py' --include='*.sh' --include='*.toml' --exclude-dir=.git --exclude-dir=_saidas -e "$pad" . | head -5)
   hist=$(git log --all -p 2>/dev/null | grep -c "${opt[@]}" -e "$pad")
   if [ -n "$achou" ] || [ "$hist" != "0" ]; then
     falhou=1; echo "FALHA: $pad (histórico: $hist)"; [ -n "$achou" ] && echo "$achou"

@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tipos de dados em Rust — inteiros, float, bool, char, tuplas e arrays | Guia Rust</title>
+<meta name="description" content="Os tipos escalares e compostos do Rust: i32, u8, usize, f64, bool, char, tuplas e arrays; anotação de tipo, conversão com as, overflow e o erro de índice fora do array.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Tipos de <span class="hl">dados</span></h1>
+
+<p class="intro">Rust é uma linguagem de <strong>tipagem estática</strong>: o compilador precisa saber o tipo de cada valor antes de rodar. Na maior parte das vezes ele descobre sozinho (isso se chama <em>inferência</em>), mas às vezes você precisa dizer. Nesta aula você conhece os tipos básicos.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Os tipos <strong>escalares</strong>: inteiros, ponto flutuante, <code>bool</code> e <code>char</code>.</li>
+<li>Os tipos <strong>compostos</strong>: tuplas e arrays.</li>
+<li>A conversar entre tipos com <code>as</code> e o que acontece num <em>overflow</em> ou num índice fora do array.</li>
+</ul></div>
+
+<hr>
+<h2>1. Inteiros</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Tamanho</th><th>Com sinal</th><th>Sem sinal</th></tr>
+<tr><td>8 bits</td><td><code>i8</code> (−128 a 127)</td><td><code>u8</code> (0 a 255)</td></tr>
+<tr><td>16 bits</td><td><code>i16</code></td><td><code>u16</code></td></tr>
+<tr><td>32 bits</td><td><code>i32</code> (o padrão)</td><td><code>u32</code></td></tr>
+<tr><td>64 bits</td><td><code>i64</code></td><td><code>u64</code></td></tr>
+<tr><td>128 bits</td><td><code>i128</code></td><td><code>u128</code></td></tr>
+<tr><td>do tamanho da máquina</td><td><code>isize</code></td><td><code>usize</code> (índices e tamanhos)</td></tr>
+</table></div>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let a = 42;            // i32, o padrão
+    let b: u8 = 255;       // anotação de tipo
+    let c = 1_000_000i64;  // sufixo e separador _
+    let d = 0xff;          // hexadecimal
+    println!("{a} {b} {c} {d}");
+    println!("u8 vai de {} a {}", u8::MIN, u8::MAX);
+    println!("i32 vai até {}", i32::MAX);
+    println!("divisão inteira: {}, resto: {}", 7 / 2, 7 % 2);
+}</pre>
+<pre class="term" data-cwd="~/projetos/inteiros">$ cargo run
+   Compiling inteiros v0.1.0 (/home/ana/projetos/inteiros)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/inteiros`
+42 255 1000000 255
+u8 vai de 0 a 255
+i32 vai até 2147483647
+divisão inteira: 3, resto: 1</pre>
+<p>Repare: <code>7 / 2</code> com inteiros dá <code>3</code> (a parte fracionária é descartada). O <code>_</code> só ajuda a ler números grandes.</p>
+
+<hr>
+<h2>2. Ponto flutuante, <code>bool</code> e <code>char</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let x = 2.5;           // f64, o padrão
+    let y: f32 = 1.0 / 3.0;
+    let ligado = true;
+    let letra = 'R';
+    let emoji = '🦀';
+    println!("{x} {y} {ligado} {letra} {emoji}");
+    println!("7.0 / 2.0 = {}", 7.0 / 2.0);
+    println!("raiz de 2 = {:.4}", 2.0_f64.sqrt());
+}</pre>
+<pre class="term" data-cwd="~/projetos/escalares">$ cargo run
+   Compiling escalares v0.1.0 (/home/ana/projetos/escalares)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/escalares`
+2.5 0.33333334 true R 🦀
+7.0 / 2.0 = 3.5
+raiz de 2 = 1.4142</pre>
+<p>O <code>char</code> usa aspas simples e guarda <strong>um</strong> caractere Unicode (4 bytes), inclusive acentos e emojis. Texto, com aspas duplas, é outra coisa (<code>&amp;str</code> e <code>String</code>), que você vê nas aulas de slices e de strings.</p>
+
+<hr>
+<h2>3. Quando dá errado: misturar tipos</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let inteiro = 10;
+    let fracao = 2.5;
+    println!("{}", inteiro + fracao);
+}</pre>
+<pre class="term" data-cwd="~/projetos/mistura">$ cargo run
+   Compiling mistura v0.1.0 (/home/ana/projetos/mistura)
+error[E0277]: cannot add a float to an integer
+ --&gt; src/main.rs:4:28
+  |
+4 |     println!("{}", inteiro + fracao);
+  |                            ^ no implementation for `{integer} + {float}`
+  |
+  = help: the trait `Add&lt;{float}&gt;` is not implemented for `{integer}`
+  = help: the following other types implement trait `Add&lt;Rhs&gt;`:
+            `&amp;f128` implements `Add&lt;f128&gt;`
+            `&amp;f128` implements `Add`
+            `&amp;f16` implements `Add&lt;f16&gt;`
+            `&amp;f16` implements `Add`
+            `&amp;f32` implements `Add&lt;f32&gt;`
+            `&amp;f32` implements `Add`
+            `&amp;f64` implements `Add&lt;f64&gt;`
+            `&amp;f64` implements `Add`
+          and 56 others
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `mistura` (bin "mistura") due to 1 previous error</pre>
+<p>Rust não converte números sozinho: <code>i32 + f64</code> não existe. O <code>E0277</code> diz que não há implementação de soma de inteiro com float. Converta você mesmo com <code>as</code>:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let inteiro = 10;
+    let fracao = 2.5;
+    println!("{}", inteiro as f64 + fracao);
+    println!("{}", 3.99_f64 as i32);
+    println!("{}", 300_i32 as u8);
+    println!("{}", 'A' as u8);
+}</pre>
+<pre class="term" data-cwd="~/projetos/as">$ cargo run
+   Compiling as v0.1.0 (/home/ana/projetos/as)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/as`
+12.5
+3
+44
+65</pre>
+<p>Cuidado: <code>as</code> não arredonda (<code>3.99</code> vira <code>3</code>) e, ao caber num tipo menor, corta os bits (<code>300</code> vira <code>44</code>, porque 300 − 256 = 44).</p>
+
+<hr>
+<h2>4. Overflow: estourar o tamanho do tipo</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut nivel: u8 = 250;
+    for _ in 0..10 {
+        nivel += 1;
+    }
+    println!("{nivel}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/overflow">$ cargo run
+   Compiling overflow v0.1.0 (/home/ana/projetos/overflow)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/overflow`
+
+thread 'main' (167193) panicked at src/main.rs:4:9:
+attempt to add with overflow
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+<p>No perfil <code>dev</code>, o Rust confere estouros e o programa <strong>para</strong> com um <em>panic</em> (<code>attempt to add with overflow</code>), em vez de seguir com um número errado. Para escolher o comportamento, há métodos como <code>checked_add</code>, <code>wrapping_add</code> e <code>saturating_add</code>:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let n: u8 = 250;
+    println!("{:?}", n.checked_add(10));
+    println!("{}", n.wrapping_add(10));
+    println!("{}", n.saturating_add(10));
+}</pre>
+<pre class="term" data-cwd="~/projetos/overflow-metodos">$ cargo run
+   Compiling overflow-metodos v0.1.0 (/home/ana/projetos/overflow-metodos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/overflow-metodos`
+None
+4
+255</pre>
+
+<hr>
+<h2>5. Tuplas</h2>
+<p>Uma <strong>tupla</strong> agrupa valores de tipos diferentes, com tamanho fixo:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let pessoa: (&amp;str, i32, f64) = ("Ana", 28, 1.65);
+    println!("nome: {}", pessoa.0);
+    let (nome, idade, altura) = pessoa;
+    println!("{nome} tem {idade} anos e {altura} m");
+    let vazio = ();
+    println!("{:?}", vazio);
+}</pre>
+<pre class="term" data-cwd="~/projetos/tuplas">$ cargo run
+   Compiling tuplas v0.1.0 (/home/ana/projetos/tuplas)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/tuplas`
+nome: Ana
+Ana tem 28 anos e 1.65 m
+()</pre>
+<p>Acesse com <code>.0</code>, <code>.1</code>… ou <strong>desestruture</strong> com <code>let (a, b, c) = …</code>. A tupla vazia <code>()</code> se chama <em>unit</em>: é o “nada” que funções sem retorno devolvem.</p>
+
+<hr>
+<h2>6. Arrays</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let notas = [7, 8, 10, 6];
+    let zeros = [0; 5];
+    let meses: [&amp;str; 3] = ["jan", "fev", "mar"];
+    println!("primeira nota: {}", notas[0]);
+    println!("quantidade: {}", notas.len());
+    println!("{:?} {:?}", zeros, meses);
+}</pre>
+<pre class="term" data-cwd="~/projetos/arrays">$ cargo run
+   Compiling arrays v0.1.0 (/home/ana/projetos/arrays)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/arrays`
+primeira nota: 7
+quantidade: 4
+[0, 0, 0, 0, 0] ["jan", "fev", "mar"]</pre>
+<p>Um array tem tamanho fixo e todos os elementos do mesmo tipo. O tipo se escreve <code>[tipo; tamanho]</code>. Para listas que crescem, use <code>Vec</code> (aula de coleções). E se você pedir um índice que não existe?</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let notas = [7, 8, 10, 6];
+    let i = notas.len() + 2;
+    println!("{}", notas[i]);
+}</pre>
+<pre class="term" data-cwd="~/projetos/indice">$ cargo run
+   Compiling indice v0.1.0 (/home/ana/projetos/indice)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/indice`
+
+thread 'main' (167427) panicked at src/main.rs:4:20:
+index out of bounds: the len is 4 but the index is 6
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+<p>Panic: <code>index out of bounds</code>. O Rust confere o índice e para o programa em vez de ler memória que não é do array. Esse é um dos bugs que, em C, viram falhas de segurança.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete o tipo inteiro sem sinal de 8 bits:</p><div class="ex-code">let idade: <input data-answer="u8" aria-label="resposta"> = 30;</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para converter o inteiro em <code>f64</code>:</p><div class="ex-code">let media = soma <input data-answer="as" aria-label="resposta"> f64 / 3.0;</div></div>
+<div class="mc" data-answer="1"><p class="mc-q">Qual é o tipo inteiro padrão quando você escreve <code>let x = 5;</code>?</p>
+<label><input type="radio" name="q1"> <code>i32</code></label>
+<label><input type="radio" name="q1"> <code>u8</code></label>
+<label><input type="radio" name="q1"> <code>i64</code></label>
+<label><input type="radio" name="q1"> <code>usize</code></label></div>
+<div class="mc" data-answer="3"><p class="mc-q">O que acontece no perfil <code>dev</code> quando um <code>u8</code> passa de 255?</p>
+<label><input type="radio" name="q2"> Ele vira 0 em silêncio</label>
+<label><input type="radio" name="q2"> O compilador converte para <code>u16</code></label>
+<label><input type="radio" name="q2"> O programa para com um panic de overflow</label>
+<label><input type="radio" name="q2"> Nada, o valor fica 256</label></div>
+<div class="trycmd" data-goal="src:as\s+f64;;out:Média: 7.75">
+<p class="try-task"><strong>Missão:</strong> Calcule a média das notas <code>7</code>, <code>8</code>, <code>10</code> e <code>6</code> (inteiros, num array) e imprima <code>Média: 7.75</code>. Você vai precisar converter a soma com <code>as f64</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let notas = [7, 8, 10, 6];
+    let soma = notas[0] + notas[1] + notas[2] + notas[3];
+    println!("Média: {}", soma / 4);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let notas = [7, 8, 10, 6];
+    let soma = notas[0] + notas[1] + notas[2] + notas[3];
+    println!("Média: {}", soma as f64 / 4.0);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Média: 7.75
+</pre>
+</div>
+<div class="trycmd" data-goal="src:let\s*\(\s*\w+\s*,\s*\w+\s*\)\s*=;;out:Cidade: Recife, população: 1488920">
+<p class="try-task"><strong>Missão:</strong> Crie a tupla <code>("Recife", 1488920)</code>, <strong>desestruture</strong> com <code>let (cidade, populacao) = …;</code> e imprima <code>Cidade: Recife, população: 1488920</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let dados = ("Recife", 1488920);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let dados = ("Recife", 1488920);
+    let (cidade, populacao) = dados;
+    println!("Cidade: {cidade}, população: {populacao}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Cidade: Recife, população: 1488920
+</pre>
+</div>
+<div class="trycmd" data-goal="src:saturating_add;;out:Volume: 255">
+<p class="try-task"><strong>Missão:</strong> O volume vai de 0 a 255 (<code>u8</code>). Aumente <code>volume</code> (que começa em 240) em 50 usando <code>saturating_add</code>, para não dar panic, e imprima <code>Volume: 255</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let volume: u8 = 240;
+    let volume = volume + 50;
+    println!("Volume: {volume}");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let volume: u8 = 240;
+    let volume = volume.saturating_add(50);
+    println!("Volume: {volume}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Volume: 255
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Inteiros (<code>i32</code> padrão, <code>u8</code>, <code>usize</code>…), floats (<code>f64</code> padrão), <code>bool</code> e <code>char</code> (Unicode).</li>
+<li>Rust não mistura tipos sozinho: converta com <code>as</code>, sabendo que ele trunca.</li>
+<li>Overflow e índice fora do array viram panic no modo <code>dev</code>, não bugs silenciosos.</li>
+<li>Tuplas agrupam tipos diferentes; arrays, valores do mesmo tipo com tamanho fixo.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

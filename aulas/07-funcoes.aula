@@ -1,0 +1,197 @@
+---
+slug: funcoes
+menu: Funções
+titulo: Funções em Rust — parâmetros, retorno, expressões e blocos | Guia Rust
+desc: Como declarar funções em Rust com fn, tipar parâmetros, devolver valores, a diferença entre instrução e expressão, o retorno sem ponto e vírgula e o erro E0308 que aparece quando ele sobra.
+h1: <span class="hl">Funções</span>
+nivel: n1
+grupo: Fundamentos
+---
+<p class="intro">Funções dividem o programa em pedaços com nome. Em Rust elas são declaradas com <code>fn</code>, os parâmetros sempre têm tipo e o valor devolvido vem depois de uma seta <code>-&gt;</code>. O detalhe mais importante desta aula é pequeno: um <strong>ponto e vírgula</strong> a mais ou a menos muda o que a função devolve.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A declarar funções com parâmetros tipados e retorno.</li>
+<li>A diferença entre <strong>instrução</strong> e <strong>expressão</strong>.</li>
+<li>Por que <code>x + 1</code> devolve e <code>x + 1;</code> não, com o erro real.</li>
+</ul></div>
+
+<hr>
+<h2>1. Declarando e chamando</h2>
+::: exemplo funcoes
+fn main() {
+    saudar("Ana");
+    saudar("Bruno");
+    mostrar_soma(3, 4);
+}
+
+fn saudar(nome: &str) {
+    println!("Oi, {nome}!");
+}
+
+fn mostrar_soma(a: i32, b: i32) {
+    println!("{a} + {b} = {}", a + b);
+}
+:::
+<p>A ordem não importa: <code>main</code> pode chamar funções declaradas depois dela. Nomes de função usam <em>snake_case</em> (minúsculas com <code>_</code>). Cada parâmetro precisa do tipo: <code>a: i32</code>.</p>
+
+<hr>
+<h2>2. Devolvendo valores</h2>
+::: exemplo retorno
+fn dobro(x: i32) -> i32 {
+    x * 2
+}
+
+fn area(largura: f64, altura: f64) -> f64 {
+    largura * altura
+}
+
+fn main() {
+    let d = dobro(21);
+    println!("dobro: {d}");
+    println!("área: {}", area(2.5, 4.0));
+}
+:::
+<dl class="anatomy"><dt>fn dobro</dt><dd>o nome.</dd><dt>(x: i32)</dt><dd>o parâmetro e seu tipo.</dd><dt>-&gt; i32</dt><dd>o tipo do valor devolvido.</dd><dt>x * 2</dt><dd>a última expressão, <strong>sem</strong> <code>;</code>, é o valor devolvido.</dd></dl>
+
+<hr>
+<h2>3. Instrução × expressão</h2>
+<p>Uma <strong>instrução</strong> faz algo e não produz valor (<code>let y = 6;</code>). Uma <strong>expressão</strong> produz um valor (<code>5 + 6</code>, uma chamada de função, um bloco <code>{ }</code>). O ponto e vírgula transforma uma expressão em instrução. Até um bloco tem valor:</p>
+::: exemplo blocos
+fn main() {
+    let y = {
+        let x = 3;
+        x + 1
+    };
+    println!("y vale {y}");
+}
+:::
+
+<hr>
+<h2>4. Quando dá errado: o <code>;</code> que sobra</h2>
+::: exemplo ponto-virgula falha
+fn mais_um(x: i32) -> i32 {
+    x + 1;
+}
+
+fn main() {
+    println!("{}", mais_um(5));
+}
+:::
+<p>Com o <code>;</code>, a última linha virou instrução, e o corpo não devolve nada (ou melhor, devolve <code>()</code>). Mas a assinatura promete um <code>i32</code>: erro <strong>E0308</strong>. A mensagem é ótima: ela diz <em>implicitly returns `()`</em> e sugere, no <code>help</code>, apagar o ponto e vírgula.</p>
+
+<hr>
+<h2>5. <code>return</code> antecipado</h2>
+<p>Para sair antes do fim, use <code>return</code>. Por estilo, só se usa <code>return</code> para saídas antecipadas; no fim, a expressão sem <code>;</code>.</p>
+::: exemplo return
+fn classificar(nota: u32) -> &'static str {
+    if nota >= 7 {
+        return "aprovado";
+    }
+    "recuperação"
+}
+
+fn main() {
+    println!("{}", classificar(9));
+    println!("{}", classificar(5));
+}
+:::
+<p>O <code>&amp;'static str</code> é um texto fixo, escrito no programa. O <code>'static</code> é um <em>lifetime</em>, assunto do Nível 2. Por enquanto, leia como “texto que vive o programa inteiro”.</p>
+
+<hr>
+<h2>6. Devolvendo vários valores com tupla</h2>
+::: exemplo tupla-retorno
+fn divisao(a: i32, b: i32) -> (i32, i32) {
+    (a / b, a % b)
+}
+
+fn main() {
+    let (q, r) = divisao(17, 5);
+    println!("17 / 5 = {q}, resto {r}");
+}
+:::
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete a assinatura de uma função que recebe e devolve <code>i32</code>:
+fn triplo(x: i32) [[-> i32]] {
+    x * 3
+}
+:::
+::: ex
+Complete com a palavra que sai antes do fim da função:
+if n == 0 { [[return]] 0; }
+:::
+::: mc 2
+Por que <code>fn f() -&gt; i32 { 5; }</code> não compila?
+- Porque 5 não é <code>i32</code>
+- Porque o <code>;</code> transforma a expressão em instrução, e a função passa a devolver <code>()</code>
+- Porque falta <code>return</code> sempre
+- Porque funções não podem devolver números
+:::
+::: mc 1
+Qual destas é uma <strong>expressão</strong>?
+- <code>a + b</code>
+- <code>let x = 5;</code>
+- <code>fn soma() {}</code>
+- <code>use std::io;</code>
+:::
+::: missao goal="src:fn\s+quadrado\s*\(\s*\w+\s*:\s*i32\s*\)\s*->\s*i32;;out:O quadrado de 12 é 144"
+Escreva a função <code>fn quadrado(n: i32) -&gt; i32</code> e use-a em <code>main</code> para imprimir <code>O quadrado de 12 é 144</code>.
+--- script
+fn main() {
+    println!("O quadrado de 12 é {}", 0);
+}
+--- solucao
+fn quadrado(n: i32) -> i32 {
+    n * n
+}
+
+fn main() {
+    println!("O quadrado de 12 é {}", quadrado(12));
+}
+:::
+::: missao goal="src:a\s*\+\s*b\s*$;;out:Soma: 30;;semerro"
+O programa abaixo dá o erro E0308 por causa de um ponto e vírgula. Conserte-o para imprimir <code>Soma: 30</code>.
+--- script
+fn somar(a: i32, b: i32) -> i32 {
+    a + b;
+}
+
+fn main() {
+    println!("Soma: {}", somar(10, 20));
+}
+--- solucao
+fn somar(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    println!("Soma: {}", somar(10, 20));
+}
+:::
+::: missao goal="src:->\s*\(\s*i32\s*,\s*i32\s*\);;out:Menor: 3, maior: 9"
+Escreva <code>fn menor_maior(a: i32, b: i32) -&gt; (i32, i32)</code>, que devolve primeiro o menor e depois o maior. Chame com <code>(9, 3)</code> e imprima <code>Menor: 3, maior: 9</code>.
+--- script
+fn main() {
+    let (menor, maior) = (0, 0);
+    println!("Menor: {menor}, maior: {maior}");
+}
+--- solucao
+fn menor_maior(a: i32, b: i32) -> (i32, i32) {
+    if a < b { (a, b) } else { (b, a) }
+}
+
+fn main() {
+    let (menor, maior) = menor_maior(9, 3);
+    println!("Menor: {menor}, maior: {maior}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>fn nome(p: Tipo) -&gt; Retorno { … }</code>; parâmetros sempre tipados.</li>
+<li>A última expressão <strong>sem</strong> <code>;</code> é o valor devolvido; <code>return</code> é para sair antes.</li>
+<li>Um <code>;</code> a mais faz a função devolver <code>()</code> e dá o erro E0308.</li>
+<li>Blocos <code>{ }</code> também são expressões e têm valor.</li>
+</ul>
