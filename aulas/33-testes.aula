@@ -1,0 +1,310 @@
+---
+slug: testes
+menu: Testes com cargo test
+titulo: Testes em Rust — #[test], assert_eq!, cargo test, should_panic e testes de integração | Guia Rust
+desc: Como testar código Rust com cargo test: funções #[test], assert!, assert_eq! e assert_ne!, o módulo #[cfg(test)], a saída de um teste que falha, #[should_panic], testes que devolvem Result, filtrar testes e a pasta tests/.
+h1: Testes com <span class="hl">cargo test</span>
+nivel: n2
+grupo: Qualidade
+---
+<p class="intro">O Rust vem com testes embutidos: você escreve funções marcadas com <code>#[test]</code> e roda todas com <code>cargo test</code>. Não precisa instalar nada. Os testes ficam ao lado do código, no mesmo arquivo, e o compilador só os inclui quando você está testando.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A escrever testes com <code>#[test]</code>, <code>assert!</code>, <code>assert_eq!</code> e <code>assert_ne!</code>.</li>
+<li>A ler a saída de um teste que passa e de um que falha.</li>
+<li><code>#[should_panic]</code>, testes com <code>Result</code>, filtros e testes de integração na pasta <code>tests/</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. O primeiro teste</h2>
+::: exemplo primeiro cmd="cargo test"
+fn soma(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    println!("{}", soma(2, 2));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn soma_dois_numeros() {
+        assert_eq!(soma(2, 3), 5);
+    }
+
+    #[test]
+    fn soma_com_negativo() {
+        assert_eq!(soma(-1, 1), 0);
+    }
+}
+:::
+<dl class="anatomy"><dt>#[cfg(test)]</dt><dd>só compila o módulo quando se roda <code>cargo test</code>.</dd><dt>use super::*;</dt><dd>traz as funções do módulo de cima (<code>soma</code>).</dd><dt>#[test]</dt><dd>marca a função como teste.</dd><dt>assert_eq!(a, b)</dt><dd>falha o teste se <code>a</code> for diferente de <code>b</code>.</dd></dl>
+
+<hr>
+<h2>2. Quando um teste falha</h2>
+::: exemplo falha cmd="cargo test" falha
+fn desconto(preco: f64, porcentagem: f64) -> f64 {
+    preco * porcentagem / 100.0
+}
+
+fn main() {
+    println!("{}", desconto(200.0, 10.0));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dez_por_cento_de_200() {
+        assert_eq!(desconto(200.0, 10.0), 180.0);
+    }
+}
+:::
+<p>O teste esperava o preço <strong>com</strong> desconto (180), mas a função devolve o <strong>valor</strong> do desconto (20). A saída mostra os dois lados: <code>left</code> (o que a função deu) e <code>right</code> (o esperado). Achou um bug, ou o teste está errado: é para isso que testes servem.</p>
+
+<hr>
+<h2>3. <code>assert!</code>, mensagens e <code>should_panic</code></h2>
+::: exemplo asserts cmd="cargo test"
+pub struct Idade(u8);
+
+impl Idade {
+    pub fn new(valor: i32) -> Idade {
+        if !(0..=150).contains(&valor) {
+            panic!("idade fora do intervalo: {valor}");
+        }
+        Idade(valor as u8)
+    }
+    pub fn maior_de_idade(&self) -> bool {
+        self.0 >= 18
+    }
+}
+
+fn main() {
+    println!("{}", Idade::new(20).maior_de_idade());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn adulto() {
+        assert!(Idade::new(30).maior_de_idade(), "30 anos deveria ser maior de idade");
+    }
+
+    #[test]
+    fn crianca() {
+        assert_ne!(Idade::new(10).maior_de_idade(), true);
+    }
+
+    #[test]
+    #[should_panic(expected = "fora do intervalo")]
+    fn negativa_da_panic() {
+        Idade::new(-5);
+    }
+}
+:::
+<p><code>#[should_panic]</code> inverte o teste: ele passa só se o código der panic (e, com <code>expected</code>, só se a mensagem tiver aquele trecho).</p>
+
+<hr>
+<h2>4. Testes com <code>Result</code> e filtros</h2>
+::: terminal filtros projeto
+$ cargo test conversao
+$ cargo test -- --list
+--- codigo
+fn main() {}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn conversao_ok() -> Result<(), std::num::ParseIntError> {
+        let n: i32 = "42".parse()?;
+        assert_eq!(n, 42);
+        Ok(())
+    }
+
+    #[test]
+    fn conversao_negativa() -> Result<(), std::num::ParseIntError> {
+        let n: i32 = "-7".parse()?;
+        assert!(n < 0);
+        Ok(())
+    }
+
+    #[test]
+    fn outra_coisa() {
+        assert_eq!(1 + 1, 2);
+    }
+}
+:::
+<p>Um teste pode devolver <code>Result</code> e usar <code>?</code>: se chegar um <code>Err</code>, o teste falha. <code>cargo test conversao</code> roda só os testes com “conversao” no nome (repare no <code>1 filtered out</code>). Tudo depois de <code>--</code> vai para o executável de testes, como o <code>--list</code>.</p>
+
+<hr>
+<h2>5. Testes de integração: a pasta <code>tests/</code></h2>
+<p>Testes na pasta <code>tests/</code> usam a sua biblioteca como um usuário de fora usaria, só pela parte pública:</p>
+::: terminal integracao projeto
+$ find src tests -type f | sort
+$ cargo test
+--- arquivo src/lib.rs
+pub fn eh_palindromo(s: &str) -> bool {
+    let letras: Vec<char> = s.chars().filter(|c| c.is_alphanumeric()).flat_map(|c| c.to_lowercase()).collect();
+    letras.iter().eq(letras.iter().rev())
+}
+--- arquivo tests/palindromos.rs
+use integracao::eh_palindromo;
+
+#[test]
+fn reconhece_palindromos() {
+    assert!(eh_palindromo("Ame a ema"));
+    assert!(eh_palindromo("A base do teto desaba"));
+}
+
+#[test]
+fn recusa_frase_comum() {
+    assert!(!eh_palindromo("Rust é legal"));
+}
+:::
+<p>O <code>cargo test</code> roda três grupos: os testes unitários da biblioteca, os de cada arquivo em <code>tests/</code> e os <em>doc-tests</em> (exemplos de código dentro dos comentários <code>///</code>, que também são compilados e testados).</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o atributo que marca uma função de teste:
+#[[[test]]]
+fn funciona() { }
+:::
+::: ex
+Complete a macro que compara dois valores:
+[[assert_eq!]](dobro(4), 8);
+:::
+::: mc 3
+Para que serve <code>#[cfg(test)]</code> no módulo de testes?
+- Para rodar os testes mais rápido
+- Para esconder os testes do <code>cargo test</code>
+- Para compilar o módulo só ao testar, e não no programa final
+- Para testar só no Windows
+:::
+::: mc 1
+O que <code>#[should_panic]</code> faz?
+- O teste passa só se o código der panic
+- O teste é ignorado
+- O teste roda duas vezes
+- O teste nunca pode dar panic
+:::
+::: missao goal="src:#\[test\];;src:assert_eq!;;outre:test result: ok\. [2-9] passed;;semerro" cmd="cargo test"
+Escreva <code>fn eh_par(n: i32) -&gt; bool</code> e pelo menos <strong>dois</strong> testes com <code>assert_eq!</code> num módulo <code>#[cfg(test)]</code>. Rode com <code>cargo test</code> e cole a saída: ela deve terminar em <code>test result: ok.</code>
+--- script
+fn eh_par(n: i32) -> bool {
+    n % 2 == 0
+}
+
+fn main() {
+    println!("{}", eh_par(4));
+}
+--- solucao
+fn eh_par(n: i32) -> bool {
+    n % 2 == 0
+}
+
+fn main() {
+    println!("{}", eh_par(4));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quatro_eh_par() {
+        assert_eq!(eh_par(4), true);
+    }
+
+    #[test]
+    fn sete_nao_eh_par() {
+        assert_eq!(eh_par(7), false);
+    }
+}
+:::
+::: missao goal="src:#\[should_panic;;outre:should_panic\s*\.\.\.\s*ok|- should panic \.\.\. ok;;out:test result: ok." cmd="cargo test"
+Escreva <code>fn dividir(a: i32, b: i32) -&gt; i32</code> que dá <code>panic!("divisão por zero")</code> quando <code>b == 0</code>, e um teste com <code>#[should_panic(expected = "divisão por zero")]</code>. Rode <code>cargo test</code>.
+--- script
+fn dividir(a: i32, b: i32) -> i32 {
+    a / b
+}
+
+fn main() {
+    println!("{}", dividir(10, 2));
+}
+--- solucao
+fn dividir(a: i32, b: i32) -> i32 {
+    if b == 0 {
+        panic!("divisão por zero");
+    }
+    a / b
+}
+
+fn main() {
+    println!("{}", dividir(10, 2));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic(expected = "divisão por zero")]
+    fn dividir_por_zero() {
+        dividir(1, 0);
+    }
+}
+:::
+::: missao goal="src:fn\s+media;;out:test result: ok.;;semerro" cmd="cargo test"
+O teste abaixo falha porque <code>media</code> está errada (divide pelo número errado). Conserte a <strong>função</strong> (não o teste) e rode <code>cargo test</code> até passar.
+--- script
+fn media(v: &[f64]) -> f64 {
+    v.iter().sum::<f64>() / 2.0
+}
+
+fn main() {
+    println!("{}", media(&[1.0, 2.0, 3.0]));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn media_de_tres() {
+        assert_eq!(media(&[1.0, 2.0, 3.0]), 2.0);
+    }
+}
+--- solucao
+fn media(v: &[f64]) -> f64 {
+    v.iter().sum::<f64>() / v.len() as f64
+}
+
+fn main() {
+    println!("{}", media(&[1.0, 2.0, 3.0]));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn media_de_tres() {
+        assert_eq!(media(&[1.0, 2.0, 3.0]), 2.0);
+    }
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Testes são funções <code>#[test]</code>, normalmente num <code>mod tests</code> com <code>#[cfg(test)]</code>.</li>
+<li><code>assert!</code>, <code>assert_eq!</code>, <code>assert_ne!</code>; a falha mostra <code>left</code> e <code>right</code>.</li>
+<li><code>#[should_panic]</code> espera um panic; testes podem devolver <code>Result</code>.</li>
+<li><code>cargo test nome</code> filtra; a pasta <code>tests/</code> guarda testes de integração.</li>
+</ul>

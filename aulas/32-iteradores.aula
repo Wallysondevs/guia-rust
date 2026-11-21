@@ -1,0 +1,240 @@
+---
+slug: iteradores
+menu: Iteradores
+titulo: Iteradores em Rust — iter, map, filter, collect, sum, fold, zip e preguiça | Guia Rust
+desc: Iteradores em Rust: iter, iter_mut e into_iter, adaptadores preguiçosos (map, filter, take, skip, enumerate, zip, chain), consumidores (collect, sum, count, fold, any, all, find, max_by_key) e como criar o seu com o trait Iterator.
+h1: <span class="hl">Iteradores</span>
+nivel: n2
+grupo: Abstração
+---
+<p class="intro">Um <strong>iterador</strong> entrega os itens de uma sequência, um por vez. Em Rust, eles são o jeito mais comum de processar coleções: você encadeia passos como “filtra, transforma, soma” e o compilador transforma tudo num laço tão rápido quanto um escrito à mão.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A diferença entre <code>iter()</code>, <code>iter_mut()</code> e <code>into_iter()</code>.</li>
+<li>Adaptadores (<code>map</code>, <code>filter</code>, <code>zip</code>…) são <strong>preguiçosos</strong>; consumidores (<code>collect</code>, <code>sum</code>…) fazem o trabalho.</li>
+<li>A criar o seu próprio iterador implementando o trait <code>Iterator</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Três jeitos de iterar</h2>
+::: exemplo tres
+fn main() {
+    let mut nums = vec![1, 2, 3];
+    let soma: i32 = nums.iter().sum();
+    println!("soma (emprestado): {soma}");
+    for n in nums.iter_mut() {
+        *n *= 10;
+    }
+    println!("depois do iter_mut: {:?}", nums);
+    let textos: Vec<String> = nums.into_iter().map(|n| format!("#{n}")).collect();
+    println!("{:?}", textos);
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>Cada item é</th><th>A coleção</th></tr>
+<tr><td><code>iter()</code></td><td><code>&amp;T</code></td><td>continua valendo</td></tr>
+<tr><td><code>iter_mut()</code></td><td><code>&amp;mut T</code></td><td>continua valendo, alterada</td></tr>
+<tr><td><code>into_iter()</code></td><td><code>T</code></td><td>é consumida</td></tr>
+</table></div>
+
+<hr>
+<h2>2. Adaptadores são preguiçosos</h2>
+::: exemplo preguica
+fn main() {
+    let v = vec![1, 2, 3];
+    v.iter().map(|x| {
+        println!("processando {x}");
+        x * 2
+    });
+    println!("nada foi processado ainda");
+    let dobrados: Vec<i32> = v.iter().map(|x| x * 2).collect();
+    println!("{:?}", dobrados);
+}
+:::
+<p>O primeiro <code>map</code> não imprimiu nada: um adaptador só descreve o trabalho. Quem executa é um <strong>consumidor</strong>, como <code>collect</code>. O compilador até avisa (<code>unused `Map` that must be used</code>): um iterador que ninguém consome é quase sempre um engano.</p>
+
+<hr>
+<h2>3. Encadeando</h2>
+::: exemplo cadeia
+fn main() {
+    let numeros = 1..=10;
+    let resultado: Vec<u32> = numeros
+        .filter(|n| n % 2 == 1)
+        .map(|n| n * n)
+        .take(3)
+        .collect();
+    println!("{:?}", resultado);
+
+    let nomes = ["ana", "bia", "caio"];
+    let idades = [28, 31, 25];
+    for (nome, idade) in nomes.iter().zip(idades.iter()) {
+        println!("{nome}: {idade}");
+    }
+    let todos: Vec<i32> = (1..3).chain(7..9).collect();
+    println!("{:?}", todos);
+    let pulando: Vec<_> = "a,b,c,d,e".split(',').skip(1).step_by(2).collect();
+    println!("{:?}", pulando);
+}
+:::
+
+<hr>
+<h2>4. Consumidores</h2>
+::: exemplo consumidores
+fn main() {
+    let notas = [7.5, 9.0, 4.0, 8.5, 6.0];
+    let total: f64 = notas.iter().sum();
+    let aprovados = notas.iter().filter(|&&n| n >= 7.0).count();
+    println!("média {:.2}, aprovados {aprovados}", total / notas.len() as f64);
+    println!("alguém tirou 10? {}", notas.iter().any(|&n| n == 10.0));
+    println!("todos acima de 3? {}", notas.iter().all(|&n| n > 3.0));
+    println!("primeira abaixo de 7: {:?}", notas.iter().find(|&&n| n < 7.0));
+    println!("posição do 4.0: {:?}", notas.iter().position(|&n| n == 4.0));
+    let produto = (1..=5).fold(1, |acc, x| acc * x);
+    println!("5! = {produto}");
+    let palavras = ["sol", "paralelepípedo", "mar"];
+    println!("maior: {:?}", palavras.iter().max_by_key(|p| p.chars().count()));
+    let frase = palavras.iter().map(|p| p.to_uppercase()).collect::<Vec<_>>().join(" ");
+    println!("{frase}");
+}
+:::
+<p>O <code>fold</code> “dobra” a sequência num valor só: começa com <code>1</code> e, para cada item, calcula <code>acc * x</code>. Os <code>&amp;&amp;n</code> aparecem porque <code>filter</code> recebe uma referência para o item, e o item do <code>iter()</code> já é uma referência.</p>
+
+<hr>
+<h2>5. Quando dá errado: <code>collect</code> sem tipo</h2>
+::: exemplo collect-erro falha
+fn main() {
+    let v = [1, 2, 3].iter().map(|x| x + 1).collect();
+    println!("{:?}", v);
+}
+:::
+<p>O <code>collect</code> sabe montar vários tipos (<code>Vec</code>, <code>String</code>, <code>HashMap</code>…) e precisa saber qual. Anote a variável (<code>let v: Vec&lt;i32&gt;</code>) ou use o “turbofish”: <code>.collect::&lt;Vec&lt;_&gt;&gt;()</code>.</p>
+
+<hr>
+<h2>6. Seu próprio iterador</h2>
+::: exemplo proprio
+struct Contagem {
+    atual: u32,
+    fim: u32,
+}
+
+impl Iterator for Contagem {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.atual < self.fim {
+            self.atual += 1;
+            Some(self.atual)
+        } else {
+            None
+        }
+    }
+}
+
+fn main() {
+    let c = Contagem { atual: 0, fim: 5 };
+    let v: Vec<u32> = c.collect();
+    println!("{:?}", v);
+    let soma: u32 = Contagem { atual: 0, fim: 100 }.filter(|n| n % 3 == 0).sum();
+    println!("soma dos múltiplos de 3 até 100: {soma}");
+}
+:::
+<p>Basta implementar <code>next</code>, que devolve <code>Some(item)</code> ou <code>None</code> no fim. Todos os outros métodos (<code>filter</code>, <code>sum</code>, <code>collect</code>…) vêm de graça do trait.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o consumidor que junta os itens num vetor:
+let v: Vec<i32> = (1..4).[[collect]]();
+:::
+::: ex
+Complete o adaptador que mantém só os pares:
+let pares = v.iter().[[filter]](|n| *n % 2 == 0);
+:::
+::: mc 2
+Por que <code>v.iter().map(|x| x * 2);</code> sozinho não faz nada?
+- Porque <code>map</code> só funciona com <code>for</code>
+- Porque adaptadores são preguiçosos: só rodam quando um consumidor pede os itens
+- Porque falta <code>mut</code>
+- Porque <code>v</code> está vazio
+:::
+::: mc 4
+Qual método percorre consumindo a coleção (itens <code>T</code>, não <code>&amp;T</code>)?
+- <code>iter()</code>
+- <code>iter_mut()</code>
+- <code>chars()</code>
+- <code>into_iter()</code>
+:::
+::: missao goal="src:\.filter\(;;src:\.map\(;;src:\.sum|fold;;out:Soma dos quadrados dos pares: 220"
+Com uma cadeia de iteradores sobre <code>1..=10</code>, filtre os pares, eleve ao quadrado e some. Imprima <code>Soma dos quadrados dos pares: 220</code>.
+--- script
+fn main() {
+    let mut soma = 0;
+    for n in 1..=10 {
+        if n % 2 == 0 {
+            soma += n * n;
+        }
+    }
+    println!("Soma dos quadrados dos pares: {soma}");
+}
+--- solucao
+fn main() {
+    let soma: u32 = (1..=10).filter(|n| n % 2 == 0).map(|n| n * n).sum();
+    println!("Soma dos quadrados dos pares: {soma}");
+}
+:::
+::: missao goal="src:\.zip\(;;out:Ana: 9;;out:Caio: 6"
+Use <code>zip</code> para juntar <code>["Ana", "Bia", "Caio"]</code> com <code>[9, 7, 6]</code> e imprima uma linha por aluno: <code>Ana: 9</code>, <code>Bia: 7</code>, <code>Caio: 6</code>.
+--- script
+fn main() {
+    let nomes = ["Ana", "Bia", "Caio"];
+    let notas = [9, 7, 6];
+}
+--- solucao
+fn main() {
+    let nomes = ["Ana", "Bia", "Caio"];
+    let notas = [9, 7, 6];
+    for (n, nota) in nomes.iter().zip(notas.iter()) {
+        println!("{n}: {nota}");
+    }
+}
+:::
+::: missao goal="src:impl\s+Iterator\s+for\s+Fibonacci;;src:type\s+Item;;out:[1, 1, 2, 3, 5, 8, 13, 21, 34, 55]"
+Implemente <code>Iterator</code> para <code>struct Fibonacci { a: u64, b: u64 }</code> (começando com <code>a = 1, b = 1</code>; cada <code>next</code> devolve <code>a</code> e avança). Imprima os 10 primeiros com <code>.take(10).collect::&lt;Vec&lt;_&gt;&gt;()</code>.
+--- script
+struct Fibonacci {
+    a: u64,
+    b: u64,
+}
+
+fn main() {
+}
+--- solucao
+struct Fibonacci {
+    a: u64,
+    b: u64,
+}
+
+impl Iterator for Fibonacci {
+    type Item = u64;
+
+    fn next(&mut self) -> Option<u64> {
+        let atual = self.a;
+        self.a = self.b;
+        self.b += atual;
+        Some(atual)
+    }
+}
+
+fn main() {
+    let f = Fibonacci { a: 1, b: 1 };
+    println!("{:?}", f.take(10).collect::<Vec<_>>());
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>iter()</code> empresta, <code>iter_mut()</code> empresta para mudar, <code>into_iter()</code> consome.</li>
+<li>Adaptadores (<code>map</code>, <code>filter</code>, <code>zip</code>, <code>take</code>…) são preguiçosos; consumidores (<code>collect</code>, <code>sum</code>, <code>count</code>, <code>fold</code>…) executam.</li>
+<li><code>collect</code> precisa saber o tipo de destino.</li>
+<li>Implementando <code>next</code>, seu tipo ganha todos os métodos de <code>Iterator</code>.</li>
+</ul>

@@ -52,7 +52,11 @@ var NIVEIS = [
       ["traits.html", "Traits"],
       ["generics.html", "Generics"],
       ["lifetimes.html", "Lifetimes"],
-      ["closures.html", "Closures"]
+      ["closures.html", "Closures"],
+      ["iteradores.html", "Iteradores"]
+    ]},
+    { grupo: "Qualidade", itens: [
+      ["testes.html", "Testes com cargo test"]
     ]}
   ]}
 ];
