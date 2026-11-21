@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Result em Rust — Ok, Err, panic!, parse, match e erros próprios | Guia Rust</title>
+<meta name="description" content="Tratamento de erros em Rust: erros irrecuperáveis com panic! e recuperáveis com Result&lt;T, E&gt;; Ok e Err, match em Result, ler arquivos com std::fs, unwrap_or_else, map_err e um tipo de erro próprio com enum.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Result</span> e panic!</h1>
+
+<p class="intro">Rust separa os erros em dois tipos. Os <strong>irrecuperáveis</strong> (um bug, um índice impossível) param o programa com <code>panic!</code>. Os <strong>recuperáveis</strong> (arquivo que não existe, texto que não é número) são valores do tipo <code>Result&lt;T, E&gt;</code>, que o seu código é obrigado a tratar.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Quando usar <code>panic!</code> e o que ele mostra.</li>
+<li><code>Result&lt;T, E&gt;</code> com <code>Ok</code> e <code>Err</code>, e como tratar com <code>match</code>.</li>
+<li>Erros reais de <code>parse</code> e de leitura de arquivo, e um tipo de erro próprio.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>panic!</code>: parar tudo</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    println!("antes");
+    panic!("algo impossível aconteceu");
+}</pre>
+<pre class="term" data-cwd="~/projetos/panic">$ cargo run
+   Compiling panic v0.1.0 (/home/ana/projetos/panic)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/panic`
+antes
+
+thread 'main' (218992) panicked at src/main.rs:3:5:
+algo impossível aconteceu
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+<p>O panic imprime a mensagem, o arquivo e a linha, e encerra o programa com código de saída diferente de zero. Rodando com <code>RUST_BACKTRACE=1</code>, ele mostra também o caminho de chamadas até ali.</p>
+
+<hr>
+<h2>2. <code>Result&lt;T, E&gt;</code></h2>
+<pre class="syntax">enum Result&lt;T, E&gt; {
+    Ok(T),   // deu certo, com o valor do tipo T
+    Err(E),  // deu errado, com o erro do tipo E
+}</pre>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let textos = ["42", "-7", "abc", ""];
+    for t in textos {
+        match t.parse::&lt;i32&gt;() {
+            Ok(n) =&gt; println!("'{t}' -&gt; número {n}"),
+            Err(e) =&gt; println!("'{t}' -&gt; erro: {e}"),
+        }
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/parse">$ cargo run
+   Compiling parse v0.1.0 (/home/ana/projetos/parse)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/parse`
+'42' -&gt; número 42
+'-7' -&gt; número -7
+'abc' -&gt; erro: invalid digit found in string
+'' -&gt; erro: cannot parse integer from empty string</pre>
+<p>O <code>parse</code> devolve <code>Result&lt;i32, ParseIntError&gt;</code>. As mensagens de erro (<code>invalid digit found in string</code>, <code>cannot parse integer from empty string</code>) vêm da própria biblioteca padrão.</p>
+
+<hr>
+<h2>3. Lendo um arquivo</h2>
+<pre class="file" data-file="src/main.rs">use std::fs;
+
+fn main() {
+    match fs::read_to_string("notas.txt") {
+        Ok(conteudo) =&gt; print!("notas.txt: {conteudo}"),
+        Err(e) =&gt; println!("não li notas.txt: {e}"),
+    }
+    match fs::read_to_string("nao-existe.txt") {
+        Ok(conteudo) =&gt; print!("{conteudo}"),
+        Err(e) =&gt; println!("não li nao-existe.txt: {e}"),
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/arquivo">$ echo "linha um" &gt; notas.txt
+$ cargo run
+   Compiling arquivo v0.1.0 (/home/ana/projetos/arquivo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/arquivo`
+notas.txt: linha um
+não li nao-existe.txt: No such file or directory (os error 2)</pre>
+<p>O <code>use std::fs;</code> traz o módulo de arquivos da biblioteca padrão. O erro de arquivo inexistente vem do sistema operacional, com o código <code>os error 2</code>.</p>
+
+<hr>
+<h2>4. Quando dá errado: ignorar o <code>Result</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let n: i32 = "10".parse();
+    println!("{}", n + 1);
+}</pre>
+<pre class="term" data-cwd="~/projetos/result-erro">$ cargo run
+   Compiling result-erro v0.1.0 (/home/ana/projetos/result-erro)
+error[E0308]: mismatched types
+ --&gt; src/main.rs:2:18
+  |
+2 |     let n: i32 = "10".parse();
+  |            ---   ^^^^^^^^^^^^ expected `i32`, found `Result&lt;_, _&gt;`
+  |            |
+  |            expected due to this
+  |
+  = note: expected type `i32`
+             found enum `Result&lt;_, _&gt;`
+help: consider using `Result::expect` to unwrap the `Result&lt;_, _&gt;` value, panicking if the value is a `Result::Err`
+  |
+2 |     let n: i32 = "10".parse().expect("REASON");
+  |                              +++++++++++++++++
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `result-erro` (bin "result-erro") due to 1 previous error</pre>
+<p>O <code>parse</code> não devolve um <code>i32</code>, devolve um <code>Result</code>. Assim como no <code>Option</code>, o tipo obriga você a decidir o que fazer com o erro. O compilador até sugere usar <code>?</code> ou <code>expect</code>.</p>
+
+<hr>
+<h2>5. Atalhos: <code>unwrap_or</code>, <code>unwrap_or_else</code>, <code>map_err</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let a: i32 = "abc".parse().unwrap_or(0);
+    println!("a = {a}");
+    let b: i32 = "xyz".parse().unwrap_or_else(|e| {
+        println!("aviso: {e}");
+        -1
+    });
+    println!("b = {b}");
+    let c: Result&lt;i32, String&gt; = "7x".parse::&lt;i32&gt;().map_err(|e| format!("entrada ruim: {e}"));
+    println!("{:?}", c);
+    println!("{}", "5".parse::&lt;i32&gt;().is_ok());
+}</pre>
+<pre class="term" data-cwd="~/projetos/atalhos">$ cargo run
+   Compiling atalhos v0.1.0 (/home/ana/projetos/atalhos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/atalhos`
+a = 0
+aviso: invalid digit found in string
+b = -1
+Err("entrada ruim: invalid digit found in string")
+true</pre>
+
+<hr>
+<h2>6. Seu próprio tipo de erro</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+enum ErroSaque {
+    SaldoInsuficiente { saldo: u32, pedido: u32 },
+    ValorZero,
+}
+
+fn sacar(saldo: u32, valor: u32) -&gt; Result&lt;u32, ErroSaque&gt; {
+    if valor == 0 {
+        return Err(ErroSaque::ValorZero);
+    }
+    if valor &gt; saldo {
+        return Err(ErroSaque::SaldoInsuficiente { saldo, pedido: valor });
+    }
+    Ok(saldo - valor)
+}
+
+fn main() {
+    println!("{:?}", sacar(100, 30));
+    println!("{:?}", sacar(100, 0));
+    match sacar(100, 250) {
+        Ok(resto) =&gt; println!("sobrou {resto}"),
+        Err(ErroSaque::SaldoInsuficiente { saldo, pedido }) =&gt; {
+            println!("faltam {} (saldo {saldo}, pedido {pedido})", pedido - saldo)
+        }
+        Err(e) =&gt; println!("erro: {:?}", e),
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/erro-proprio">$ cargo run
+   Compiling erro-proprio v0.1.0 (/home/ana/projetos/erro-proprio)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/erro-proprio`
+Ok(70)
+Err(ValorZero)
+faltam 150 (saldo 100, pedido 250)</pre>
+<p>Um enum de erros deixa claro, no tipo, tudo que pode dar errado, e o <code>match</code> obriga quem chama a pensar em cada caso.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete a variante de sucesso:</p><div class="ex-code">return <input data-answer="Ok" aria-label="resposta">(valor);</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o tipo de retorno (sucesso <code>f64</code>, erro <code>String</code>):</p><div class="ex-code">fn media(v: &amp;[f64]) -&gt; <input data-answer="Result&lt;f64, String&gt;" aria-label="resposta"> { todo!() }</div></div>
+<div class="mc" data-answer="1"><p class="mc-q">Quando usar <code>panic!</code> em vez de <code>Result</code>?</p>
+<label><input type="radio" name="q1"> Quando o erro indica um bug, algo que nunca deveria acontecer</label>
+<label><input type="radio" name="q1"> Sempre que um arquivo não existir</label>
+<label><input type="radio" name="q1"> Quando o usuário digitar errado</label>
+<label><input type="radio" name="q1"> Nunca, <code>panic!</code> não existe em Rust</label></div>
+<div class="mc" data-answer="4"><p class="mc-q">O que <code>"abc".parse::&lt;i32&gt;()</code> devolve?</p>
+<label><input type="radio" name="q2"> <code>0</code></label>
+<label><input type="radio" name="q2"> <code>None</code></label>
+<label><input type="radio" name="q2"> Um panic</label>
+<label><input type="radio" name="q2"> <code>Err(...)</code> com um <code>ParseIntError</code></label></div>
+<div class="trycmd" data-goal="src:Result&lt;f64,\s*String&gt;;;src:Err\(;;out:Ok(5.0);;out:Err(&quot;divisão por zero&quot;)">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn dividir(a: f64, b: f64) -&gt; Result&lt;f64, String&gt;</code> que devolve <code>Err("divisão por zero".to_string())</code> quando <code>b</code> é zero. Imprima com <code>{:?}</code> os resultados de <code>dividir(10.0, 2.0)</code> e <code>dividir(1.0, 0.0)</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn dividir(a: f64, b: f64) -&gt; Result&lt;f64, String&gt; {
+    if b == 0.0 {
+        Err("divisão por zero".to_string())
+    } else {
+        Ok(a / b)
+    }
+}
+
+fn main() {
+    println!("{:?}", dividir(10.0, 2.0));
+    println!("{:?}", dividir(1.0, 0.0));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+Ok(5.0)
+Err("divisão por zero")
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\bmatch\b;;src:Err\(\w+\)\s*=&gt;;;out:12 é válido;;out:'doze' é inválido: invalid digit found in string">
+<p class="try-task"><strong>Missão:</strong> Para cada texto de <code>["12", "doze"]</code>, use <code>match</code> no <code>parse::&lt;u8&gt;()</code> e imprima <code>12 é válido</code> ou <code>'doze' é inválido: </code> seguido da mensagem do erro.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    for t in ["12", "doze"] {
+        let n: u8 = t.parse().unwrap();
+        println!("{n} é válido");
+    }
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    for t in ["12", "doze"] {
+        match t.parse::&lt;u8&gt;() {
+            Ok(n) =&gt; println!("{n} é válido"),
+            Err(e) =&gt; println!("'{t}' é inválido: {e}"),
+        }
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+12 é válido
+'doze' é inválido: invalid digit found in string
+</pre>
+</div>
+<div class="trycmd" data-goal="src:enum\s+ErroIdade;;src:Result&lt;u8,\s*ErroIdade&gt;;;out:Ok(30);;out:Err(Negativa);;out:Err(Absurda)">
+<p class="try-task"><strong>Missão:</strong> Crie <code>#[derive(Debug)] enum ErroIdade { Negativa, Absurda }</code> e <code>fn validar(idade: i32) -&gt; Result&lt;u8, ErroIdade&gt;</code>: negativa é <code>Negativa</code>, acima de 150 é <code>Absurda</code>, senão <code>Ok(idade as u8)</code>. Imprima com <code>{:?}</code> para 30, -2 e 200.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+#[derive(Debug)]
+enum ErroIdade {
+    Negativa,
+    Absurda,
+}
+
+fn validar(idade: i32) -&gt; Result&lt;u8, ErroIdade&gt; {
+    if idade &lt; 0 {
+        Err(ErroIdade::Negativa)
+    } else if idade &gt; 150 {
+        Err(ErroIdade::Absurda)
+    } else {
+        Ok(idade as u8)
+    }
+}
+
+fn main() {
+    println!("{:?}", validar(30));
+    println!("{:?}", validar(-2));
+    println!("{:?}", validar(200));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Ok(30)
+Err(Negativa)
+Err(Absurda)
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>panic!</code> para bugs; <code>Result&lt;T, E&gt;</code> para erros esperados.</li>
+<li>Trate com <code>match</code> (<code>Ok(v)</code> / <code>Err(e)</code>) ou com atalhos como <code>unwrap_or</code> e <code>map_err</code>.</li>
+<li>Um <code>enum</code> de erros documenta, no tipo, o que pode dar errado.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

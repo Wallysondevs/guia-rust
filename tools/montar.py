@@ -244,7 +244,7 @@ def b_terminal(opts, corpo, slug):
 def b_missao(opts, corpo, slug):
     global MISSOES
     MISSOES += 1
-    goal = opts["goal"]
+    goal = html.unescape(opts["goal"])
     cmd = opts.get("cmd", "cargo run")
     sec, ordem = secoes(corpo, "tarefa")
     tarefa = sec[("tarefa", "")]

@@ -32,6 +32,13 @@ var NIVEIS = [
       ["enums.html", "Enums"],
       ["match.html", "match e if let"]
     ]}
+  ]},
+  { id: "n2", nome: "Nível 2 · Intermediário", curto: "Intermediário", desc: "Erros, coleções, traits, generics, closures e testes", grupos: [
+    { grupo: "Tratando Erros", itens: [
+      ["option.html", "Option em detalhe"],
+      ["result.html", "Result e panic!"],
+      ["interrogacao.html", "O operador ?"]
+    ]}
   ]}
 ];
 /* niveis:fim */

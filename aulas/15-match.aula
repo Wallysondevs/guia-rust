@@ -195,7 +195,7 @@ fn main() {
     }
 }
 :::
-::: missao goal="src:Direcao::Oeste;;out:direita;;semerro"
+::: missao goal="src:Direcao::Oeste\s*=>;;out:direita;;semerro"
 O programa abaixo dá E0004. Acrescente o braço que falta (<code>Direcao::Oeste =&gt; "esquerda"</code>) sem usar <code>_</code>, e rode.
 --- script
 enum Direcao {

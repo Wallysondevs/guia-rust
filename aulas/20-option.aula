@@ -1,0 +1,191 @@
+---
+slug: option
+menu: Option em detalhe
+titulo: Option em Rust — unwrap, expect, unwrap_or, map, and_then e if let | Guia Rust
+desc: Como trabalhar com Option<T> em Rust: match, if let, unwrap e o panic que ele causa, expect, unwrap_or, unwrap_or_default, map, and_then, filter, is_some e ok_or.
+h1: <span class="hl">Option</span> em detalhe
+nivel: n2
+grupo: Tratando Erros
+---
+<p class="intro">Você já viu que <code>Option&lt;T&gt;</code> é <code>Some(valor)</code> ou <code>None</code>. Nesta aula você aprende a <strong>abrir</strong> um <code>Option</code> com segurança e a transformá-lo sem escrever um <code>match</code> para cada passo. Esses métodos aparecem em todo código Rust.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li><code>unwrap</code> e <code>expect</code>, e o panic que eles causam com <code>None</code>.</li>
+<li><code>unwrap_or</code>, <code>unwrap_or_else</code> e <code>unwrap_or_default</code>, para ter um valor padrão.</li>
+<li><code>map</code>, <code>and_then</code>, <code>filter</code> e <code>ok_or</code>, para encadear transformações.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>unwrap</code> e <code>expect</code>: “confia em mim”</h2>
+::: exemplo unwrap
+fn main() {
+    let nomes = ["Ana", "Bia", "Caio"];
+    let primeiro = nomes.first().unwrap();
+    println!("primeiro: {primeiro}");
+    let pos = nomes.iter().position(|&n| n == "Bia").expect("Bia deveria estar na lista");
+    println!("Bia está na posição {pos}");
+}
+:::
+<p><code>unwrap()</code> devolve o valor de dentro do <code>Some</code>. <code>expect("…")</code> faz o mesmo, com uma mensagem sua. Mas se o valor for <code>None</code>…</p>
+::: exemplo unwrap-none falha
+fn main() {
+    let vazio: Vec<i32> = Vec::new();
+    let maior = vazio.iter().max().expect("a lista não pode estar vazia");
+    println!("{maior}");
+}
+:::
+<p>…o programa para com um <strong>panic</strong> e mostra a sua mensagem. Use <code>unwrap</code>/<code>expect</code> só quando um <code>None</code> for realmente impossível (ou em testes e protótipos). Prefira <code>expect</code>: a mensagem ajuda muito a achar o problema.</p>
+
+<hr>
+<h2>2. Valores padrão</h2>
+::: exemplo padrao
+fn main() {
+    let configurada: Option<u32> = None;
+    let porta = configurada.unwrap_or(8080);
+    println!("porta: {porta}");
+
+    let nome: Option<String> = None;
+    println!("nome: '{}'", nome.unwrap_or_default());
+
+    let talvez: Option<u32> = Some(3);
+    let n = talvez.unwrap_or_else(|| {
+        println!("calculando o padrão...");
+        10
+    });
+    println!("n: {n}");
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>Com <code>None</code> devolve</th></tr>
+<tr><td><code>unwrap_or(v)</code></td><td>o valor <code>v</code></td></tr>
+<tr><td><code>unwrap_or_else(|| …)</code></td><td>o resultado da closure (só calcula se precisar)</td></tr>
+<tr><td><code>unwrap_or_default()</code></td><td>o padrão do tipo: <code>0</code>, <code>""</code>, <code>false</code>…</td></tr>
+</table></div>
+<p>O <code>|| { … }</code> é uma <em>closure</em>, uma função sem nome. Você vê closures com calma no fim deste nível. Repare que <code>calculando o padrão...</code> não apareceu: como <code>talvez</code> era <code>Some(3)</code>, a closure nem rodou.</p>
+
+<hr>
+<h2>3. Transformando: <code>map</code>, <code>and_then</code>, <code>filter</code></h2>
+::: exemplo map
+fn main() {
+    let texto: Option<&str> = Some("rust");
+    let maiusculo = texto.map(|t| t.to_uppercase());
+    println!("{:?}", maiusculo);
+
+    let nada: Option<&str> = None;
+    println!("{:?}", nada.map(|t| t.len()));
+
+    let entrada = Some("42");
+    let numero = entrada.and_then(|s| s.parse::<i32>().ok());
+    println!("{:?}", numero);
+    let invalido = Some("quarenta");
+    println!("{:?}", invalido.and_then(|s| s.parse::<i32>().ok()));
+
+    let par = Some(8).filter(|n| n % 2 == 0);
+    let impar = Some(7).filter(|n| n % 2 == 0);
+    println!("{:?} {:?}", par, impar);
+}
+:::
+<ul>
+<li><code>map</code>: se for <code>Some(x)</code>, aplica a função e devolve <code>Some(resultado)</code>; se for <code>None</code>, continua <code>None</code>.</li>
+<li><code>and_then</code>: como <code>map</code>, mas a função já devolve um <code>Option</code> (evita <code>Some(Some(…))</code>).</li>
+<li><code>filter</code>: mantém o <code>Some</code> só se a condição valer.</li>
+</ul>
+
+<hr>
+<h2>4. Perguntando e convertendo</h2>
+::: exemplo perguntas
+fn main() {
+    let a: Option<i32> = Some(1);
+    let b: Option<i32> = None;
+    println!("{} {}", a.is_some(), b.is_none());
+    let r: Result<i32, &str> = b.ok_or("valor ausente");
+    println!("{:?}", r);
+    if let Some(v) = a {
+        println!("a tem {v}");
+    }
+}
+:::
+<p>O <code>ok_or</code> transforma um <code>Option</code> num <code>Result</code>, o tipo da próxima aula: <code>None</code> vira um erro com a mensagem que você escolher.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para usar 1 quando não houver valor:
+let qtd = talvez.[[unwrap_or]](1);
+:::
+::: ex
+Complete para aplicar uma função só se houver valor:
+let dobro = talvez.[[map]](|n| n * 2);
+:::
+::: mc 2
+O que acontece com <code>None::&lt;i32&gt;.unwrap()</code>?
+- Devolve 0
+- O programa para com um panic
+- Devolve <code>None</code>
+- Não compila
+:::
+::: mc 3
+Qual a diferença de <code>and_then</code> para <code>map</code>?
+- Nenhuma
+- <code>and_then</code> só funciona com números
+- Em <code>and_then</code>, a função já devolve um <code>Option</code>, e o resultado não fica aninhado
+- <code>and_then</code> abre o <code>Option</code> com panic
+:::
+::: missao goal="src:unwrap_or\(;;out:Olá, visitante!;;out:Olá, Ana!"
+Escreva <code>fn saudacao(nome: Option&lt;&amp;str&gt;) -&gt; String</code> usando <code>unwrap_or("visitante")</code>. Imprima o resultado para <code>None</code> e para <code>Some("Ana")</code>: <code>Olá, visitante!</code> e <code>Olá, Ana!</code>.
+--- script
+fn saudacao(nome: Option<&str>) -> String {
+    format!("Olá, {}!", nome.unwrap())
+}
+
+fn main() {
+    println!("{}", saudacao(None));
+    println!("{}", saudacao(Some("Ana")));
+}
+--- solucao
+fn saudacao(nome: Option<&str>) -> String {
+    format!("Olá, {}!", nome.unwrap_or("visitante"))
+}
+
+fn main() {
+    println!("{}", saudacao(None));
+    println!("{}", saudacao(Some("Ana")));
+}
+:::
+::: missao goal="src:\.map\(;;out:Some(10);;out:None"
+Use <code>map</code> para calcular o tamanho em letras de um apelido opcional. Para <code>Some("Rustáceo!!")</code> imprima <code>Some(10)</code> e para <code>None</code> imprima <code>None</code> (formato <code>{:?}</code>; dica: <code>.chars().count()</code>).
+--- script
+fn main() {
+    let a: Option<&str> = Some("Rustáceo!!");
+    let b: Option<&str> = None;
+}
+--- solucao
+fn main() {
+    let a: Option<&str> = Some("Rustáceo!!");
+    let b: Option<&str> = None;
+    println!("{:?}", a.map(|s| s.chars().count()));
+    println!("{:?}", b.map(|s| s.chars().count()));
+}
+:::
+::: missao goal="src:and_then;;src:\.ok\(\);;out:Some(25);;out:None"
+Converta textos em número com <code>and_then(|s| s.parse::&lt;u32&gt;().ok())</code>. Para <code>Some("25")</code> imprima <code>Some(25)</code>; para <code>Some("x")</code>, <code>None</code>.
+--- script
+fn main() {
+    let a = Some("25");
+    let b = Some("x");
+}
+--- solucao
+fn main() {
+    let a = Some("25");
+    let b = Some("x");
+    println!("{:?}", a.and_then(|s| s.parse::<u32>().ok()));
+    println!("{:?}", b.and_then(|s| s.parse::<u32>().ok()));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>unwrap</code>/<code>expect</code> abrem o <code>Option</code>, mas dão panic com <code>None</code>.</li>
+<li><code>unwrap_or</code>, <code>unwrap_or_else</code>, <code>unwrap_or_default</code> dão um valor padrão.</li>
+<li><code>map</code>, <code>and_then</code>, <code>filter</code> transformam sem abrir; <code>ok_or</code> vira <code>Result</code>.</li>
+</ul>

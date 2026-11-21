@@ -107,7 +107,7 @@ O que é um toolchain no rustup?
 - Um editor de código
 - Um tipo de variável
 :::
-::: missao goal="src:println!;;out:Rust instalado e funcionando!"
+::: missao goal="src:Rust instalado;;out:Rust instalado e funcionando!"
 Confirme que sua instalação compila e roda: crie um projeto (<code>cargo new teste</code>) e faça o programa imprimir <code>Rust instalado e funcionando!</code>.
 --- script
 fn main() {

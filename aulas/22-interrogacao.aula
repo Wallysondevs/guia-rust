@@ -1,0 +1,251 @@
+---
+slug: interrogacao
+menu: O operador ?
+titulo: O operador ? em Rust — propagando erros com Result e Option | Guia Rust
+desc: Como o operador ? propaga erros em Rust: devolve o Err (ou None) para quem chamou, funciona em funções que devolvem Result ou Option, main com Result, From para converter erros e o erro E0277 ao usar ? onde não pode.
+h1: O operador <span class="hl">?</span>
+nivel: n2
+grupo: Tratando Erros
+---
+<p class="intro">Quando uma função chama outras que podem falhar, escrever um <code>match</code> para cada chamada cansa. O operador <code>?</code> resolve isso: colocado depois de um <code>Result</code>, ele <strong>abre o <code>Ok</code></strong> e, se for <code>Err</code>, <strong>devolve o erro na hora</strong> para quem chamou a função.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>O que o <code>?</code> faz, comparando com o <code>match</code> equivalente.</li>
+<li>Usar <code>?</code> com <code>Option</code> e no <code>main</code>.</li>
+<li>Converter erros automaticamente com <code>From</code>, e o erro de usar <code>?</code> onde não dá.</li>
+</ul></div>
+
+<hr>
+<h2>1. Antes e depois</h2>
+<p>As duas funções abaixo fazem a mesma coisa:</p>
+::: exemplo interrogacao
+use std::num::ParseIntError;
+
+fn somar_com_match(a: &str, b: &str) -> Result<i32, ParseIntError> {
+    let x = match a.parse::<i32>() {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
+    let y = match b.parse::<i32>() {
+        Ok(v) => v,
+        Err(e) => return Err(e),
+    };
+    Ok(x + y)
+}
+
+fn somar(a: &str, b: &str) -> Result<i32, ParseIntError> {
+    let x = a.parse::<i32>()?;
+    let y = b.parse::<i32>()?;
+    Ok(x + y)
+}
+
+fn main() {
+    println!("{:?}", somar_com_match("2", "3"));
+    println!("{:?}", somar("2", "3"));
+    println!("{:?}", somar("2", "três"));
+}
+:::
+<p>O <code>?</code> é exatamente aquele <code>match</code>: <code>Ok(v)</code> vira <code>v</code>; <code>Err(e)</code> vira <code>return Err(e)</code>. O código fica com cara de “caminho feliz”, e os erros sobem sozinhos.</p>
+
+<hr>
+<h2>2. Encadeando</h2>
+::: terminal config projeto
+$ printf 'porta=8080\n' > config.txt
+$ cargo run
+--- codigo
+use std::fs;
+use std::io;
+
+fn ler_config(caminho: &str) -> Result<String, io::Error> {
+    let texto = fs::read_to_string(caminho)?;
+    Ok(texto.trim().to_string())
+}
+
+fn main() {
+    match ler_config("config.txt") {
+        Ok(c) => println!("config: {c}"),
+        Err(e) => println!("erro: {e}"),
+    }
+    match ler_config("sumiu.txt") {
+        Ok(c) => println!("config: {c}"),
+        Err(e) => println!("erro: {e}"),
+    }
+}
+:::
+
+<hr>
+<h2>3. <code>?</code> com <code>Option</code></h2>
+::: exemplo option
+fn inicial_do_segundo(nomes: &[&str]) -> Option<char> {
+    let segundo = nomes.get(1)?;
+    let letra = segundo.chars().next()?;
+    Some(letra)
+}
+
+fn main() {
+    println!("{:?}", inicial_do_segundo(&["Ana", "Bruno"]));
+    println!("{:?}", inicial_do_segundo(&["Ana"]));
+}
+:::
+<p>Numa função que devolve <code>Option</code>, o <code>?</code> abre o <code>Some</code> ou devolve <code>None</code> na hora.</p>
+
+<hr>
+<h2>4. Quando dá errado: <code>?</code> numa função que não devolve <code>Result</code></h2>
+::: exemplo interrogacao-erro falha
+fn main() {
+    let n: i32 = "10".parse()?;
+    println!("{n}");
+}
+:::
+<p>O <code>?</code> precisa ter para onde devolver o erro. O <code>main</code> padrão devolve <code>()</code>, então não dá. Mas o <code>main</code> também pode devolver um <code>Result</code>:</p>
+::: exemplo main-result falha
+use std::num::ParseIntError;
+
+fn main() -> Result<(), ParseIntError> {
+    let a: i32 = "10".parse()?;
+    println!("a = {a}");
+    let b: i32 = "dez".parse()?;
+    println!("b = {b}");
+    Ok(())
+}
+:::
+<p>Se um erro chega até o <code>main</code>, o programa termina com código de saída 1 e imprime o erro no formato <code>Debug</code> (<code>Error: ParseIntError { kind: InvalidDigit }</code>). Repare que <code>b = …</code> nunca foi impresso.</p>
+
+<hr>
+<h2>5. Erros diferentes numa função só: <code>From</code></h2>
+<p>E se uma função pode falhar lendo arquivo (<code>io::Error</code>) <strong>e</strong> convertendo número (<code>ParseIntError</code>)? Crie um enum de erros e implemente <code>From</code> para cada um: o <code>?</code> usa o <code>From</code> para converter sozinho.</p>
+::: terminal from projeto
+$ printf '41\n' > numero.txt
+$ printf 'quarenta\n' > ruim.txt
+$ cargo run
+--- codigo
+use std::fs;
+use std::io;
+use std::num::ParseIntError;
+
+#[derive(Debug)]
+enum ErroApp {
+    Arquivo(io::Error),
+    Numero(ParseIntError),
+}
+
+impl From<io::Error> for ErroApp {
+    fn from(e: io::Error) -> Self {
+        ErroApp::Arquivo(e)
+    }
+}
+
+impl From<ParseIntError> for ErroApp {
+    fn from(e: ParseIntError) -> Self {
+        ErroApp::Numero(e)
+    }
+}
+
+fn ler_e_somar_um(caminho: &str) -> Result<i32, ErroApp> {
+    let texto = fs::read_to_string(caminho)?;
+    let n: i32 = texto.trim().parse()?;
+    Ok(n + 1)
+}
+
+fn main() {
+    for caminho in ["numero.txt", "ruim.txt", "nada.txt"] {
+        match ler_e_somar_um(caminho) {
+            Ok(n) => println!("{caminho}: {n}"),
+            Err(ErroApp::Arquivo(e)) => println!("{caminho}: erro de arquivo: {e}"),
+            Err(ErroApp::Numero(e)) => println!("{caminho}: erro de número: {e}"),
+        }
+    }
+}
+:::
+<div class="tip"><strong>Atalho para programas pequenos</strong><p>O tipo <code>Box&lt;dyn std::error::Error&gt;</code> aceita qualquer erro, sem precisar de enum: <code>fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt;</code>. Você entende o <code>Box</code> e o <code>dyn</code> no Nível 3; por enquanto, saiba que ele existe.</p></div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para propagar o erro do <code>parse</code>:
+let n: i32 = texto.parse()[[?]];
+:::
+::: ex
+Complete a assinatura do <code>main</code> que pode devolver erro:
+fn main() -> [[Result<(), ParseIntError>]] {
+:::
+::: mc 2
+O que <code>valor?</code> faz quando <code>valor</code> é <code>Err(e)</code>?
+- Dá panic
+- Devolve <code>Err(e)</code> (convertido com <code>From</code>, se precisar) para quem chamou
+- Ignora o erro e continua
+- Troca por <code>Ok(0)</code>
+:::
+::: mc 3
+Em qual função o <code>?</code> pode ser usado num <code>Option</code>?
+- Em qualquer função
+- Só no <code>main</code>
+- Numa função que devolve <code>Option</code>
+- Numa função que devolve <code>()</code>
+:::
+::: missao goal="src:parse::<i32>\(\)\?|parse\(\)\?;;src:->\s*Result<i32,\s*ParseIntError>;;out:Ok(60);;out:Err(ParseIntError { kind: InvalidDigit })"
+Escreva <code>fn somar_tres(a: &amp;str, b: &amp;str, c: &amp;str) -&gt; Result&lt;i32, ParseIntError&gt;</code> usando <code>?</code> em cada <code>parse</code>. Imprima com <code>{:?}</code> o resultado de <code>("10", "20", "30")</code> e de <code>("1", "x", "3")</code>.
+--- script
+use std::num::ParseIntError;
+
+fn main() {
+}
+--- solucao
+use std::num::ParseIntError;
+
+fn somar_tres(a: &str, b: &str, c: &str) -> Result<i32, ParseIntError> {
+    let x = a.parse::<i32>()?;
+    let y = b.parse::<i32>()?;
+    let z = c.parse::<i32>()?;
+    Ok(x + y + z)
+}
+
+fn main() {
+    println!("{:?}", somar_tres("10", "20", "30"));
+    println!("{:?}", somar_tres("1", "x", "3"));
+}
+:::
+::: missao goal="src:->\s*Option<;;src:\)\?;;out:Some(&quot;Bia&quot;);;out:None"
+Escreva <code>fn ultimo_maiusculo(v: &amp;[&amp;str]) -&gt; Option&lt;&amp;str&gt;</code> que devolve o último nome só se ele começar com maiúscula. Use <code>v.last()?</code> e <code>.chars().next()?</code>. Imprima para <code>["ana", "Bia"]</code> e para <code>[]</code>.
+--- script
+fn main() {
+}
+--- solucao
+fn ultimo_maiusculo<'a>(v: &[&'a str]) -> Option<&'a str> {
+    let ultimo = v.last()?;
+    let primeira = ultimo.chars().next()?;
+    if primeira.is_uppercase() { Some(ultimo) } else { None }
+}
+
+fn main() {
+    println!("{:?}", ultimo_maiusculo(&["ana", "Bia"]));
+    let vazio: [&str; 0] = [];
+    println!("{:?}", ultimo_maiusculo(&vazio));
+}
+:::
+::: missao goal="src:fn\s+main\s*\(\s*\)\s*->\s*Result;;src:\?;;out:dobro: 84;;outre:^Error: ParseIntError"
+Faça o <code>main</code> devolver <code>Result&lt;(), ParseIntError&gt;</code>. Converta <code>"42"</code> com <code>?</code> e imprima <code>dobro: 84</code>; depois converta <code>"x"</code> com <code>?</code>. O programa deve terminar mostrando <code>Error: ParseIntError …</code>.
+--- script
+use std::num::ParseIntError;
+
+fn main() {
+    let n: i32 = "42".parse().unwrap();
+    println!("dobro: {}", n * 2);
+}
+--- solucao
+use std::num::ParseIntError;
+
+fn main() -> Result<(), ParseIntError> {
+    let n: i32 = "42".parse()?;
+    println!("dobro: {}", n * 2);
+    let _m: i32 = "x".parse()?;
+    Ok(())
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>expr?</code>: abre o <code>Ok</code>/<code>Some</code> ou devolve o <code>Err</code>/<code>None</code> na hora.</li>
+<li>Só funciona em funções que devolvem <code>Result</code> ou <code>Option</code> (o <code>main</code> pode devolver <code>Result</code>).</li>
+<li>Com <code>impl From&lt;ErroX&gt; for MeuErro</code>, o <code>?</code> converte os erros sozinho.</li>
+</ul>

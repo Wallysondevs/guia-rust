@@ -1,0 +1,224 @@
+---
+slug: result
+menu: Result e panic!
+titulo: Result em Rust — Ok, Err, panic!, parse, match e erros próprios | Guia Rust
+desc: Tratamento de erros em Rust: erros irrecuperáveis com panic! e recuperáveis com Result<T, E>; Ok e Err, match em Result, ler arquivos com std::fs, unwrap_or_else, map_err e um tipo de erro próprio com enum.
+h1: <span class="hl">Result</span> e panic!
+nivel: n2
+grupo: Tratando Erros
+---
+<p class="intro">Rust separa os erros em dois tipos. Os <strong>irrecuperáveis</strong> (um bug, um índice impossível) param o programa com <code>panic!</code>. Os <strong>recuperáveis</strong> (arquivo que não existe, texto que não é número) são valores do tipo <code>Result&lt;T, E&gt;</code>, que o seu código é obrigado a tratar.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Quando usar <code>panic!</code> e o que ele mostra.</li>
+<li><code>Result&lt;T, E&gt;</code> com <code>Ok</code> e <code>Err</code>, e como tratar com <code>match</code>.</li>
+<li>Erros reais de <code>parse</code> e de leitura de arquivo, e um tipo de erro próprio.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>panic!</code>: parar tudo</h2>
+::: exemplo panic falha
+fn main() {
+    println!("antes");
+    panic!("algo impossível aconteceu");
+}
+:::
+<p>O panic imprime a mensagem, o arquivo e a linha, e encerra o programa com código de saída diferente de zero. Rodando com <code>RUST_BACKTRACE=1</code>, ele mostra também o caminho de chamadas até ali.</p>
+
+<hr>
+<h2>2. <code>Result&lt;T, E&gt;</code></h2>
+<pre class="syntax">enum Result&lt;T, E&gt; {
+    Ok(T),   // deu certo, com o valor do tipo T
+    Err(E),  // deu errado, com o erro do tipo E
+}</pre>
+::: exemplo parse
+fn main() {
+    let textos = ["42", "-7", "abc", ""];
+    for t in textos {
+        match t.parse::<i32>() {
+            Ok(n) => println!("'{t}' -> número {n}"),
+            Err(e) => println!("'{t}' -> erro: {e}"),
+        }
+    }
+}
+:::
+<p>O <code>parse</code> devolve <code>Result&lt;i32, ParseIntError&gt;</code>. As mensagens de erro (<code>invalid digit found in string</code>, <code>cannot parse integer from empty string</code>) vêm da própria biblioteca padrão.</p>
+
+<hr>
+<h2>3. Lendo um arquivo</h2>
+::: terminal arquivo projeto
+$ echo "linha um" > notas.txt
+$ cargo run
+--- codigo
+use std::fs;
+
+fn main() {
+    match fs::read_to_string("notas.txt") {
+        Ok(conteudo) => print!("notas.txt: {conteudo}"),
+        Err(e) => println!("não li notas.txt: {e}"),
+    }
+    match fs::read_to_string("nao-existe.txt") {
+        Ok(conteudo) => print!("{conteudo}"),
+        Err(e) => println!("não li nao-existe.txt: {e}"),
+    }
+}
+:::
+<p>O <code>use std::fs;</code> traz o módulo de arquivos da biblioteca padrão. O erro de arquivo inexistente vem do sistema operacional, com o código <code>os error 2</code>.</p>
+
+<hr>
+<h2>4. Quando dá errado: ignorar o <code>Result</code></h2>
+::: exemplo result-erro falha
+fn main() {
+    let n: i32 = "10".parse();
+    println!("{}", n + 1);
+}
+:::
+<p>O <code>parse</code> não devolve um <code>i32</code>, devolve um <code>Result</code>. Assim como no <code>Option</code>, o tipo obriga você a decidir o que fazer com o erro. O compilador até sugere usar <code>?</code> ou <code>expect</code>.</p>
+
+<hr>
+<h2>5. Atalhos: <code>unwrap_or</code>, <code>unwrap_or_else</code>, <code>map_err</code></h2>
+::: exemplo atalhos
+fn main() {
+    let a: i32 = "abc".parse().unwrap_or(0);
+    println!("a = {a}");
+    let b: i32 = "xyz".parse().unwrap_or_else(|e| {
+        println!("aviso: {e}");
+        -1
+    });
+    println!("b = {b}");
+    let c: Result<i32, String> = "7x".parse::<i32>().map_err(|e| format!("entrada ruim: {e}"));
+    println!("{:?}", c);
+    println!("{}", "5".parse::<i32>().is_ok());
+}
+:::
+
+<hr>
+<h2>6. Seu próprio tipo de erro</h2>
+::: exemplo erro-proprio
+#[derive(Debug)]
+enum ErroSaque {
+    SaldoInsuficiente { saldo: u32, pedido: u32 },
+    ValorZero,
+}
+
+fn sacar(saldo: u32, valor: u32) -> Result<u32, ErroSaque> {
+    if valor == 0 {
+        return Err(ErroSaque::ValorZero);
+    }
+    if valor > saldo {
+        return Err(ErroSaque::SaldoInsuficiente { saldo, pedido: valor });
+    }
+    Ok(saldo - valor)
+}
+
+fn main() {
+    println!("{:?}", sacar(100, 30));
+    println!("{:?}", sacar(100, 0));
+    match sacar(100, 250) {
+        Ok(resto) => println!("sobrou {resto}"),
+        Err(ErroSaque::SaldoInsuficiente { saldo, pedido }) => {
+            println!("faltam {} (saldo {saldo}, pedido {pedido})", pedido - saldo)
+        }
+        Err(e) => println!("erro: {:?}", e),
+    }
+}
+:::
+<p>Um enum de erros deixa claro, no tipo, tudo que pode dar errado, e o <code>match</code> obriga quem chama a pensar em cada caso.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete a variante de sucesso:
+return [[Ok]](valor);
+:::
+::: ex
+Complete o tipo de retorno (sucesso <code>f64</code>, erro <code>String</code>):
+fn media(v: &[f64]) -> [[Result<f64, String>]] { todo!() }
+:::
+::: mc 1
+Quando usar <code>panic!</code> em vez de <code>Result</code>?
+- Quando o erro indica um bug, algo que nunca deveria acontecer
+- Sempre que um arquivo não existir
+- Quando o usuário digitar errado
+- Nunca, <code>panic!</code> não existe em Rust
+:::
+::: mc 4
+O que <code>"abc".parse::&lt;i32&gt;()</code> devolve?
+- <code>0</code>
+- <code>None</code>
+- Um panic
+- <code>Err(...)</code> com um <code>ParseIntError</code>
+:::
+::: missao goal="src:Result<f64,\s*String>;;src:Err\(;;out:Ok(5.0);;out:Err(&quot;divisão por zero&quot;)"
+Escreva <code>fn dividir(a: f64, b: f64) -&gt; Result&lt;f64, String&gt;</code> que devolve <code>Err("divisão por zero".to_string())</code> quando <code>b</code> é zero. Imprima com <code>{:?}</code> os resultados de <code>dividir(10.0, 2.0)</code> e <code>dividir(1.0, 0.0)</code>.
+--- script
+fn main() {
+}
+--- solucao
+fn dividir(a: f64, b: f64) -> Result<f64, String> {
+    if b == 0.0 {
+        Err("divisão por zero".to_string())
+    } else {
+        Ok(a / b)
+    }
+}
+
+fn main() {
+    println!("{:?}", dividir(10.0, 2.0));
+    println!("{:?}", dividir(1.0, 0.0));
+}
+:::
+::: missao goal="src:\bmatch\b;;src:Err\(\w+\)\s*=>;;out:12 é válido;;out:'doze' é inválido: invalid digit found in string"
+Para cada texto de <code>["12", "doze"]</code>, use <code>match</code> no <code>parse::&lt;u8&gt;()</code> e imprima <code>12 é válido</code> ou <code>'doze' é inválido: </code> seguido da mensagem do erro.
+--- script
+fn main() {
+    for t in ["12", "doze"] {
+        let n: u8 = t.parse().unwrap();
+        println!("{n} é válido");
+    }
+}
+--- solucao
+fn main() {
+    for t in ["12", "doze"] {
+        match t.parse::<u8>() {
+            Ok(n) => println!("{n} é válido"),
+            Err(e) => println!("'{t}' é inválido: {e}"),
+        }
+    }
+}
+:::
+::: missao goal="src:enum\s+ErroIdade;;src:Result<u8,\s*ErroIdade>;;out:Ok(30);;out:Err(Negativa);;out:Err(Absurda)"
+Crie <code>#[derive(Debug)] enum ErroIdade { Negativa, Absurda }</code> e <code>fn validar(idade: i32) -&gt; Result&lt;u8, ErroIdade&gt;</code>: negativa é <code>Negativa</code>, acima de 150 é <code>Absurda</code>, senão <code>Ok(idade as u8)</code>. Imprima com <code>{:?}</code> para 30, -2 e 200.
+--- script
+fn main() {
+}
+--- solucao
+#[derive(Debug)]
+enum ErroIdade {
+    Negativa,
+    Absurda,
+}
+
+fn validar(idade: i32) -> Result<u8, ErroIdade> {
+    if idade < 0 {
+        Err(ErroIdade::Negativa)
+    } else if idade > 150 {
+        Err(ErroIdade::Absurda)
+    } else {
+        Ok(idade as u8)
+    }
+}
+
+fn main() {
+    println!("{:?}", validar(30));
+    println!("{:?}", validar(-2));
+    println!("{:?}", validar(200));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>panic!</code> para bugs; <code>Result&lt;T, E&gt;</code> para erros esperados.</li>
+<li>Trate com <code>match</code> (<code>Ok(v)</code> / <code>Err(e)</code>) ou com atalhos como <code>unwrap_or</code> e <code>map_err</code>.</li>
+<li>Um <code>enum</code> de erros documenta, no tipo, o que pode dar errado.</li>
+</ul>

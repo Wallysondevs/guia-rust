@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Option em Rust — unwrap, expect, unwrap_or, map, and_then e if let | Guia Rust</title>
+<meta name="description" content="Como trabalhar com Option&lt;T&gt; em Rust: match, if let, unwrap e o panic que ele causa, expect, unwrap_or, unwrap_or_default, map, and_then, filter, is_some e ok_or.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Option</span> em detalhe</h1>
+
+<p class="intro">Você já viu que <code>Option&lt;T&gt;</code> é <code>Some(valor)</code> ou <code>None</code>. Nesta aula você aprende a <strong>abrir</strong> um <code>Option</code> com segurança e a transformá-lo sem escrever um <code>match</code> para cada passo. Esses métodos aparecem em todo código Rust.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li><code>unwrap</code> e <code>expect</code>, e o panic que eles causam com <code>None</code>.</li>
+<li><code>unwrap_or</code>, <code>unwrap_or_else</code> e <code>unwrap_or_default</code>, para ter um valor padrão.</li>
+<li><code>map</code>, <code>and_then</code>, <code>filter</code> e <code>ok_or</code>, para encadear transformações.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>unwrap</code> e <code>expect</code>: “confia em mim”</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let nomes = ["Ana", "Bia", "Caio"];
+    let primeiro = nomes.first().unwrap();
+    println!("primeiro: {primeiro}");
+    let pos = nomes.iter().position(|&amp;n| n == "Bia").expect("Bia deveria estar na lista");
+    println!("Bia está na posição {pos}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/unwrap">$ cargo run
+   Compiling unwrap v0.1.0 (/home/ana/projetos/unwrap)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/unwrap`
+primeiro: Ana
+Bia está na posição 1</pre>
+<p><code>unwrap()</code> devolve o valor de dentro do <code>Some</code>. <code>expect("…")</code> faz o mesmo, com uma mensagem sua. Mas se o valor for <code>None</code>…</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let vazio: Vec&lt;i32&gt; = Vec::new();
+    let maior = vazio.iter().max().expect("a lista não pode estar vazia");
+    println!("{maior}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/unwrap-none">$ cargo run
+   Compiling unwrap-none v0.1.0 (/home/ana/projetos/unwrap-none)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/unwrap-none`
+
+thread 'main' (218391) panicked at src/main.rs:3:36:
+a lista não pode estar vazia
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+<p>…o programa para com um <strong>panic</strong> e mostra a sua mensagem. Use <code>unwrap</code>/<code>expect</code> só quando um <code>None</code> for realmente impossível (ou em testes e protótipos). Prefira <code>expect</code>: a mensagem ajuda muito a achar o problema.</p>
+
+<hr>
+<h2>2. Valores padrão</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let configurada: Option&lt;u32&gt; = None;
+    let porta = configurada.unwrap_or(8080);
+    println!("porta: {porta}");
+
+    let nome: Option&lt;String&gt; = None;
+    println!("nome: '{}'", nome.unwrap_or_default());
+
+    let talvez: Option&lt;u32&gt; = Some(3);
+    let n = talvez.unwrap_or_else(|| {
+        println!("calculando o padrão...");
+        10
+    });
+    println!("n: {n}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/padrao">$ cargo run
+   Compiling padrao v0.1.0 (/home/ana/projetos/padrao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/padrao`
+porta: 8080
+nome: ''
+n: 3</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>Com <code>None</code> devolve</th></tr>
+<tr><td><code>unwrap_or(v)</code></td><td>o valor <code>v</code></td></tr>
+<tr><td><code>unwrap_or_else(|| …)</code></td><td>o resultado da closure (só calcula se precisar)</td></tr>
+<tr><td><code>unwrap_or_default()</code></td><td>o padrão do tipo: <code>0</code>, <code>""</code>, <code>false</code>…</td></tr>
+</table></div>
+<p>O <code>|| { … }</code> é uma <em>closure</em>, uma função sem nome. Você vê closures com calma no fim deste nível. Repare que <code>calculando o padrão...</code> não apareceu: como <code>talvez</code> era <code>Some(3)</code>, a closure nem rodou.</p>
+
+<hr>
+<h2>3. Transformando: <code>map</code>, <code>and_then</code>, <code>filter</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let texto: Option&lt;&amp;str&gt; = Some("rust");
+    let maiusculo = texto.map(|t| t.to_uppercase());
+    println!("{:?}", maiusculo);
+
+    let nada: Option&lt;&amp;str&gt; = None;
+    println!("{:?}", nada.map(|t| t.len()));
+
+    let entrada = Some("42");
+    let numero = entrada.and_then(|s| s.parse::&lt;i32&gt;().ok());
+    println!("{:?}", numero);
+    let invalido = Some("quarenta");
+    println!("{:?}", invalido.and_then(|s| s.parse::&lt;i32&gt;().ok()));
+
+    let par = Some(8).filter(|n| n % 2 == 0);
+    let impar = Some(7).filter(|n| n % 2 == 0);
+    println!("{:?} {:?}", par, impar);
+}</pre>
+<pre class="term" data-cwd="~/projetos/map">$ cargo run
+   Compiling map v0.1.0 (/home/ana/projetos/map)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/map`
+Some("RUST")
+None
+Some(42)
+None
+Some(8) None</pre>
+<ul>
+<li><code>map</code>: se for <code>Some(x)</code>, aplica a função e devolve <code>Some(resultado)</code>; se for <code>None</code>, continua <code>None</code>.</li>
+<li><code>and_then</code>: como <code>map</code>, mas a função já devolve um <code>Option</code> (evita <code>Some(Some(…))</code>).</li>
+<li><code>filter</code>: mantém o <code>Some</code> só se a condição valer.</li>
+</ul>
+
+<hr>
+<h2>4. Perguntando e convertendo</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let a: Option&lt;i32&gt; = Some(1);
+    let b: Option&lt;i32&gt; = None;
+    println!("{} {}", a.is_some(), b.is_none());
+    let r: Result&lt;i32, &amp;str&gt; = b.ok_or("valor ausente");
+    println!("{:?}", r);
+    if let Some(v) = a {
+        println!("a tem {v}");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/perguntas">$ cargo run
+   Compiling perguntas v0.1.0 (/home/ana/projetos/perguntas)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/perguntas`
+true true
+Err("valor ausente")
+a tem 1</pre>
+<p>O <code>ok_or</code> transforma um <code>Option</code> num <code>Result</code>, o tipo da próxima aula: <code>None</code> vira um erro com a mensagem que você escolher.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para usar 1 quando não houver valor:</p><div class="ex-code">let qtd = talvez.<input data-answer="unwrap_or" aria-label="resposta">(1);</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para aplicar uma função só se houver valor:</p><div class="ex-code">let dobro = talvez.<input data-answer="map" aria-label="resposta">(|n| n * 2);</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">O que acontece com <code>None::&lt;i32&gt;.unwrap()</code>?</p>
+<label><input type="radio" name="q1"> Devolve 0</label>
+<label><input type="radio" name="q1"> O programa para com um panic</label>
+<label><input type="radio" name="q1"> Devolve <code>None</code></label>
+<label><input type="radio" name="q1"> Não compila</label></div>
+<div class="mc" data-answer="3"><p class="mc-q">Qual a diferença de <code>and_then</code> para <code>map</code>?</p>
+<label><input type="radio" name="q2"> Nenhuma</label>
+<label><input type="radio" name="q2"> <code>and_then</code> só funciona com números</label>
+<label><input type="radio" name="q2"> Em <code>and_then</code>, a função já devolve um <code>Option</code>, e o resultado não fica aninhado</label>
+<label><input type="radio" name="q2"> <code>and_then</code> abre o <code>Option</code> com panic</label></div>
+<div class="trycmd" data-goal="src:unwrap_or\(;;out:Olá, visitante!;;out:Olá, Ana!">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn saudacao(nome: Option&lt;&amp;str&gt;) -&gt; String</code> usando <code>unwrap_or("visitante")</code>. Imprima o resultado para <code>None</code> e para <code>Some("Ana")</code>: <code>Olá, visitante!</code> e <code>Olá, Ana!</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn saudacao(nome: Option&lt;&amp;str&gt;) -&gt; String {
+    format!("Olá, {}!", nome.unwrap())
+}
+
+fn main() {
+    println!("{}", saudacao(None));
+    println!("{}", saudacao(Some("Ana")));
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn saudacao(nome: Option&lt;&amp;str&gt;) -&gt; String {
+    format!("Olá, {}!", nome.unwrap_or("visitante"))
+}
+
+fn main() {
+    println!("{}", saudacao(None));
+    println!("{}", saudacao(Some("Ana")));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+Olá, visitante!
+Olá, Ana!
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\.map\(;;out:Some(10);;out:None">
+<p class="try-task"><strong>Missão:</strong> Use <code>map</code> para calcular o tamanho em letras de um apelido opcional. Para <code>Some("Rustáceo!!")</code> imprima <code>Some(10)</code> e para <code>None</code> imprima <code>None</code> (formato <code>{:?}</code>; dica: <code>.chars().count()</code>).</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let a: Option&lt;&amp;str&gt; = Some("Rustáceo!!");
+    let b: Option&lt;&amp;str&gt; = None;
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let a: Option&lt;&amp;str&gt; = Some("Rustáceo!!");
+    let b: Option&lt;&amp;str&gt; = None;
+    println!("{:?}", a.map(|s| s.chars().count()));
+    println!("{:?}", b.map(|s| s.chars().count()));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Some(10)
+None
+</pre>
+</div>
+<div class="trycmd" data-goal="src:and_then;;src:\.ok\(\);;out:Some(25);;out:None">
+<p class="try-task"><strong>Missão:</strong> Converta textos em número com <code>and_then(|s| s.parse::&lt;u32&gt;().ok())</code>. Para <code>Some("25")</code> imprima <code>Some(25)</code>; para <code>Some("x")</code>, <code>None</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let a = Some("25");
+    let b = Some("x");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let a = Some("25");
+    let b = Some("x");
+    println!("{:?}", a.and_then(|s| s.parse::&lt;u32&gt;().ok()));
+    println!("{:?}", b.and_then(|s| s.parse::&lt;u32&gt;().ok()));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+Some(25)
+None
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>unwrap</code>/<code>expect</code> abrem o <code>Option</code>, mas dão panic com <code>None</code>.</li>
+<li><code>unwrap_or</code>, <code>unwrap_or_else</code>, <code>unwrap_or_default</code> dão um valor padrão.</li>
+<li><code>map</code>, <code>and_then</code>, <code>filter</code> transformam sem abrir; <code>ok_or</code> vira <code>Result</code>.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
