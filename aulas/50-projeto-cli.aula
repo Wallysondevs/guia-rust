@@ -1,0 +1,274 @@
+---
+slug: projeto-cli
+menu: Projeto final: CLI (parte 1)
+titulo: Projeto final em Rust — uma ferramenta de linha de comando, parte 1 | Guia Rust
+desc: Projeto final do Guia Rust, parte 1: criar a ferramenta de terminal resumo, que lê um arquivo de texto e mostra linhas, palavras e as palavras mais frequentes. Argumentos com std::env::args, struct Config, erros com eprintln e process::exit, leitura com fs::read_to_string e contagem com HashMap.
+h1: Projeto final: <span class="hl">CLI</span> (parte 1)
+nivel: n3
+grupo: Projeto Final
+---
+<p class="intro">Hora de juntar tudo. Nestas duas aulas você vai construir <strong>resumo</strong>, uma ferramenta de terminal de verdade: ela lê um arquivo de texto e mostra quantas linhas, palavras e caracteres ele tem, e quais palavras aparecem mais. Nesta parte: argumentos, erros e a lógica. Na <a href="projeto-cli-2.html">parte 2</a>: biblioteca, testes, variáveis de ambiente, entrada padrão e versão de release.</p>
+<div class="note"><strong>O que você vai usar</strong>: <code>cargo</code>, <code>String</code> e slices, <code>struct</code> e <code>impl</code>, <code>Result</code> e <code>?</code>, <code>Box&lt;dyn Error&gt;</code>, closures, iteradores e <code>HashMap</code>. Se algum desses estiver nebuloso, a aula correspondente está no menu.</div>
+<p>No fim desta aula, <code>cargo run -q -- poema.txt 3</code> vai mostrar a contagem e as 3 palavras mais frequentes do arquivo.</p>
+
+<hr>
+<h2>Passo 0: criar o projeto</h2>
+::: terminal resumo cwd=~/projetos
+$ cargo new resumo
+$ cd resumo
+$ ls
+:::
+<p>Crie também, na pasta do projeto (ao lado do <code>Cargo.toml</code>), o arquivo de teste <code>poema.txt</code>:</p>
+<pre class="file" data-file="poema.txt">O rio corre para o mar,
+o mar devolve a chuva ao rio,
+e a chuva cai no telhado
+da casa onde o menino lê.
+
+O menino lê sobre o rio,
+sobre o mar e sobre a chuva,
+e descobre que tudo volta
+para o lugar de onde veio.</pre>
+
+<hr>
+<h2>Passo 1: lendo os argumentos</h2>
+<p><code>std::env::args()</code> devolve um iterador com os argumentos da linha de comando. O primeiro é sempre o caminho do próprio programa.</p>
+::: terminal resumo projeto
+$ cargo run -q -- poema.txt 3
+$ cargo run -q
+--- arquivo src/main.rs
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    println!("{:?}", args);
+}
+--- oculto poema.txt
+O rio corre para o mar,
+o mar devolve a chuva ao rio,
+e a chuva cai no telhado
+da casa onde o menino lê.
+
+O menino lê sobre o rio,
+sobre o mar e sobre a chuva,
+e descobre que tudo volta
+para o lugar de onde veio.
+:::
+<p>Tudo que vem depois de <code>--</code> vai para o seu programa, não para o cargo. O <code>-q</code> (<em>quiet</em>) esconde as linhas <code>Compiling</code>/<code>Running</code> do cargo.</p>
+
+<hr>
+<h2>Passo 2: Config e mensagens de erro</h2>
+<p>Em vez de espalhar <code>args[1]</code> pelo código, junte a configuração numa struct, com um construtor que devolve <code>Result</code>:</p>
+::: terminal resumo projeto
+$ cargo run -q -- poema.txt
+$ cargo run -q -- poema.txt 3
+$ cargo run -q -- poema.txt três
+$ echo "código de saída: $?"
+$ cargo run -q
+--- arquivo src/main.rs
+use std::env;
+use std::process;
+
+struct Config {
+    arquivo: String,
+    top: usize,
+}
+
+impl Config {
+    fn new(args: &[String]) -> Result<Config, String> {
+        if args.len() < 2 {
+            return Err("faltou o nome do arquivo".to_string());
+        }
+        let arquivo = args[1].clone();
+        let top = match args.get(2) {
+            Some(t) => t.parse().map_err(|_| format!("'{t}' não é um número"))?,
+            None => 5,
+        };
+        Ok(Config { arquivo, top })
+    }
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let config = Config::new(&args).unwrap_or_else(|erro| {
+        eprintln!("erro: {erro}");
+        eprintln!("uso: resumo <arquivo> [quantas palavras]");
+        process::exit(1);
+    });
+    println!("arquivo: {}, top: {}", config.arquivo, config.top);
+}
+--- oculto poema.txt
+O rio corre para o mar,
+o mar devolve a chuva ao rio,
+e a chuva cai no telhado
+da casa onde o menino lê.
+
+O menino lê sobre o rio,
+sobre o mar e sobre a chuva,
+e descobre que tudo volta
+para o lugar de onde veio.
+:::
+<dl class="anatomy"><dt>Config::new</dt><dd>valida os argumentos e devolve <code>Ok(Config)</code> ou <code>Err(mensagem)</code>.</dd><dt>args.get(2)</dt><dd>devolve <code>Option</code>: o terceiro argumento é opcional, e o padrão é 5.</dd><dt>map_err(...)?</dt><dd>troca o erro do <code>parse</code> por uma mensagem nossa e devolve cedo.</dd><dt>unwrap_or_else</dt><dd>se der erro, roda a closure: mostra a mensagem e encerra.</dd><dt>eprintln!</dt><dd>escreve na <strong>saída de erro</strong> (stderr), não na saída normal. Assim, quem redireciona a saída para um arquivo continua vendo os erros na tela.</dd><dt>process::exit(1)</dt><dd>encerra com código 1. Por convenção, 0 é sucesso e qualquer outro número é falha; scripts usam isso (veja o <code>$?</code>).</dd></dl>
+
+<hr>
+<h2>Passo 3: ler o arquivo e contar</h2>
+<p>A lógica fica numa função <code>executar</code> que devolve <code>Result&lt;(), Box&lt;dyn Error&gt;&gt;</code>, para usar <code>?</code> com qualquer tipo de erro.</p>
+::: terminal resumo projeto
+$ cargo run -q -- poema.txt 3
+$ cargo run -q -- poema.txt
+$ cargo run -q -- sumiu.txt
+--- arquivo src/main.rs
+use std::collections::HashMap;
+use std::env;
+use std::error::Error;
+use std::fs;
+use std::process;
+
+struct Config {
+    arquivo: String,
+    top: usize,
+}
+
+impl Config {
+    fn new(args: &[String]) -> Result<Config, String> {
+        if args.len() < 2 {
+            return Err("faltou o nome do arquivo".to_string());
+        }
+        let arquivo = args[1].clone();
+        let top = match args.get(2) {
+            Some(t) => t.parse().map_err(|_| format!("'{t}' não é um número"))?,
+            None => 5,
+        };
+        Ok(Config { arquivo, top })
+    }
+}
+
+fn executar(config: Config) -> Result<(), Box<dyn Error>> {
+    let texto = fs::read_to_string(&config.arquivo)
+        .map_err(|e| format!("não consegui ler {}: {e}", config.arquivo))?;
+
+    let palavras: Vec<String> = texto
+        .split_whitespace()
+        .map(|p| p.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase())
+        .filter(|p| !p.is_empty())
+        .collect();
+
+    println!("linhas: {}", texto.lines().count());
+    println!("palavras: {}", palavras.len());
+    println!("caracteres: {}", texto.chars().count());
+
+    let mut contagem: HashMap<&str, usize> = HashMap::new();
+    for p in &palavras {
+        *contagem.entry(p.as_str()).or_insert(0) += 1;
+    }
+    let mut ranking: Vec<(&str, usize)> = contagem.into_iter().collect();
+    ranking.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+
+    println!("mais frequentes:");
+    for (p, n) in ranking.iter().take(config.top) {
+        println!("{n:>4}  {p}");
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let config = Config::new(&args).unwrap_or_else(|erro| {
+        eprintln!("erro: {erro}");
+        eprintln!("uso: resumo <arquivo> [quantas palavras]");
+        process::exit(1);
+    });
+    if let Err(e) = executar(config) {
+        eprintln!("erro: {e}");
+        process::exit(1);
+    }
+}
+--- oculto poema.txt
+O rio corre para o mar,
+o mar devolve a chuva ao rio,
+e a chuva cai no telhado
+da casa onde o menino lê.
+
+O menino lê sobre o rio,
+sobre o mar e sobre a chuva,
+e descobre que tudo volta
+para o lugar de onde veio.
+:::
+<p>Os pontos-chave:</p>
+<ul>
+<li><code>trim_matches(|c: char| !c.is_alphanumeric())</code> tira pontuação das pontas (<code>"mar,"</code> vira <code>"mar"</code>) sem estragar letras acentuadas, porque <code>is_alphanumeric</code> entende Unicode.</li>
+<li><code>entry(...).or_insert(0)</code> cria o contador na primeira vez e soma depois (veja a aula de <a href="hashmap.html">HashMap</a>).</li>
+<li>O <code>HashMap</code> não tem ordem, então o <code>sort_by</code> ordena por frequência (maior primeiro) e, no empate, em ordem alfabética: a saída sai igual em toda execução.</li>
+<li>Uma <code>String</code> com a mensagem vira <code>Box&lt;dyn Error&gt;</code> sozinha no <code>?</code>, graças ao <code>From</code>.</li>
+<li><code>texto.chars().count()</code> conta caracteres; <code>texto.len()</code> contaria bytes, e cada letra acentuada ocupa 2.</li>
+</ul>
+
+<hr>
+<h2>Missões</h2>
+<p>Estas missões usam argumentos: rode exatamente o comando indicado em cada uma.</p>
+::: missao goal="src:env::args;;src:parse;;out:soma: 42;;semerro" cmd="cargo run -- 10 20 12"
+Faça o programa somar todos os números passados na linha de comando (pule o primeiro argumento, que é o nome do programa). Rodando <code>cargo run -- 10 20 12</code>, a saída deve ser <code>soma: 42</code>.
+--- script
+fn main() {
+    // some os números passados na linha de comando
+    let soma = 0;
+    println!("soma: {soma}");
+}
+--- solucao
+use std::env;
+
+fn main() {
+    let soma: i32 = env::args()
+        .skip(1)
+        .map(|a| a.parse::<i32>().unwrap())
+        .sum();
+    println!("soma: {soma}");
+}
+:::
+::: missao goal="src:\.get\(1\);;out:olá, Ana!;;semerro" cmd="cargo run -- Ana"
+Use <code>args.get(1)</code> com <code>match</code>: se houver um nome, imprima <code>olá, NOME!</code>; se não houver, imprima <code>uso: saudar &lt;nome&gt;</code>. Rode com <code>cargo run -- Ana</code>.
+--- script
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    println!("olá, {}!", args[1]);
+}
+--- solucao
+use std::env;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    match args.get(1) {
+        Some(nome) => println!("olá, {nome}!"),
+        None => println!("uso: saudar <nome>"),
+    }
+}
+:::
+::: missao goal="src:fs::read_to_string;;out:linhas: 3;;out:palavras: 6;;semerro"
+O programa grava <code>notas.txt</code>. Leia o arquivo de volta com <code>fs::read_to_string</code> e imprima <code>linhas: 3</code> e <code>palavras: 6</code>.
+--- script
+use std::fs;
+
+fn main() {
+    fs::write("notas.txt", "comprar pão\nestudar Rust\nregar plantas\n").unwrap();
+}
+--- solucao
+use std::fs;
+
+fn main() {
+    fs::write("notas.txt", "comprar pão\nestudar Rust\nregar plantas\n").unwrap();
+    let texto = fs::read_to_string("notas.txt").unwrap();
+    println!("linhas: {}", texto.lines().count());
+    println!("palavras: {}", texto.split_whitespace().count());
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>env::args()</code> lê os argumentos; <code>cargo run -- ...</code> repassa argumentos ao programa.</li>
+<li>Uma struct <code>Config</code> com <code>new() -&gt; Result</code> centraliza a validação.</li>
+<li>Erros vão para o stderr com <code>eprintln!</code>, e <code>process::exit(1)</code> sinaliza falha.</li>
+<li><code>executar() -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt;</code> deixa usar <code>?</code> com qualquer erro.</li>
+<li>Continue na <a href="projeto-cli-2.html">parte 2</a>.</li>
+</ul>

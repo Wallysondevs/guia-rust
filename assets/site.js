@@ -76,6 +76,9 @@ var NIVEIS = [
       ["macros.html", "Macros declarativas"],
       ["unsafe.html", "unsafe básico"],
       ["traits-std.html", "Traits da biblioteca padrão"]
+    ]},
+    { grupo: "Projeto Final", itens: [
+      ["projeto-cli.html", "Projeto final: CLI (parte 1)"]
     ]}
   ]}
 ];

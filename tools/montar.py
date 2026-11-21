@@ -25,7 +25,7 @@ Formato de uma aula (aulas/NN-slug.aula):
     --- arquivo src/outro.rs
     …
     :::
-    ::: terminal NOME [cwd=~/projetos]
+    ::: terminal NOME [cwd=~/projetos]   (seções "--- arquivo X" aparecem; "--- oculto X" só são criadas)
     $ comando
     :::
     ::: missao goal="src:…;;out:…" [cmd="cargo test"]
@@ -138,7 +138,7 @@ def rodar_terminal(nome, cmds, cwd, preparo):
     marca = "@@GUIA-RUST-FIM@@"
     script = ""
     for c_ in cmds:
-        script += f"{{ {c_} ; }} 2>&1; echo \"{marca}$?\"\n"
+        script += f"{{ {c_} ; }} 2>&1; __rc=$?; echo \"{marca}$__rc\"; (exit $__rc)\n"
     rc, out = rodar_bash(script, cwd.replace("~", "/home/ana"))
     partes = out.split(marca)
     saidas = []
@@ -232,11 +232,12 @@ def b_terminal(opts, corpo, slug):
     arquivos = {}
     for (k, r) in ordem:
         if k == "codigo": arquivos["src/main.rs"] = sec[(k, r)]
-        elif k == "arquivo": arquivos[r.strip()] = sec[(k, r)]
+        elif k in ("arquivo", "oculto"): arquivos[r.strip()] = sec[(k, r)]
+    ocultos = {r.strip() for (k, r) in ordem if k == "oculto"}
     if arquivos or "projeto" in opts.get("_pos", []):
         preparo = arquivos
     saidas = rodar_terminal(nome, cmds, cwd, preparo)
-    mostrar = {k: v for k, v in arquivos.items() if k != "Cargo.toml" or "mostrar-toml" in opts.get("_pos", [])}
+    mostrar = {k: v for k, v in arquivos.items() if k not in ocultos and (k != "Cargo.toml" or "mostrar-toml" in opts.get("_pos", []))}
     if "esconder-codigo" in opts.get("_pos", []):
         mostrar = {}
     return (bloco_codigo(mostrar) + "\n" if mostrar else "") + term(cwd, list(zip(cmds, saidas)))
