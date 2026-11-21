@@ -91,7 +91,7 @@ function caixasDe(html) {
     const saidaOk = /<pre\s+class="saida-ok"[^>]*>([\s\S]*?)<\/pre>/.exec(chunk);
     const cmdm = /\bdata-cmd="([^"]*)"/.exec(attrs);
     out.push({
-      goal: gm ? gm[1].replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&") : "",
+      goal: gm ? decode(gm[1]) : "",
       script: script ? trim(decode(script[1])) : "",
       solucao: solucao ? trim(decode(solucao[1])) : "",
       saidaOk: saidaOk ? trim(decode(saidaOk[1])) : "",

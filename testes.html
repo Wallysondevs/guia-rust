@@ -358,8 +358,8 @@ test tests::dividir_por_zero - should panic ... ok
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 </pre>
 </div>
-<div class="trycmd" data-goal="src:fn\s+media;;out:test result: ok.;;semerro" data-cmd="cargo test">
-<p class="try-task"><strong>Missão:</strong> O teste abaixo falha porque <code>media</code> está errada (divide pelo número errado). Conserte a <strong>função</strong> (não o teste) e rode <code>cargo test</code> até passar.</p>
+<div class="trycmd" data-goal="src:v\.len\(\);;out:test result: ok.;;semerro" data-cmd="cargo test">
+<p class="try-task"><strong>Missão:</strong> O teste abaixo falha porque <code>media</code> está errada (divide pelo número errado). Conserte a <strong>função</strong> (não o teste) dividindo pelo tamanho do slice, <code>v.len()</code>, e rode <code>cargo test</code> até passar.</p>
 <pre class="script" data-file="src/main.rs">
 fn media(v: &amp;[f64]) -&gt; f64 {
     v.iter().sum::&lt;f64&gt;() / 2.0

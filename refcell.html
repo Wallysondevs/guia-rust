@@ -217,7 +217,7 @@ fn main() {
 ["compilou", "testou"]
 </pre>
 </div>
-<div class="trycmd" data-goal="src:Rc::clone\(&amp;placar\);;out:placar final: 30;;semerro">
+<div class="trycmd" data-goal="src:jogador2\s*=\s*Rc::clone\(&amp;placar\);;out:placar final: 30;;semerro">
 <p class="try-task"><strong>Missão:</strong> Dois jogadores compartilham um placar <code>Rc&lt;RefCell&lt;i32&gt;&gt;</code>. Crie <code>jogador2</code> com <code>Rc::clone(&amp;placar)</code>, faça cada jogador somar 10 e 20, e imprima <code>placar final: 30</code>.</p>
 <pre class="script" data-file="src/main.rs">
 use std::cell::RefCell;

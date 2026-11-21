@@ -391,7 +391,7 @@ fn main() {
 soma = 30
 </pre>
 </div>
-<div class="trycmd" data-goal="src:Poll::Pending;;out:pronto depois de 3 tentativas;;semerro">
+<div class="trycmd" data-goal="src:wake_by_ref\(\);;out:pronto depois de 3 tentativas;;semerro">
 <p class="try-task"><strong>Missão:</strong> A future <code>Teimosa</code> deve responder <code>Poll::Pending</code> nas duas primeiras chamadas a <code>poll</code> (chamando <code>cx.waker().wake_by_ref()</code> para pedir outra chance) e <code>Poll::Ready</code> na terceira. Complete o <code>poll</code> para a saída ser <code>pronto depois de 3 tentativas</code>.</p>
 <pre class="script" data-file="src/main.rs">
 use std::future::Future;

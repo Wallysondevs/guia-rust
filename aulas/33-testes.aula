@@ -260,8 +260,8 @@ mod tests {
     }
 }
 :::
-::: missao goal="src:fn\s+media;;out:test result: ok.;;semerro" cmd="cargo test"
-O teste abaixo falha porque <code>media</code> está errada (divide pelo número errado). Conserte a <strong>função</strong> (não o teste) e rode <code>cargo test</code> até passar.
+::: missao goal="src:v\.len\(\);;out:test result: ok.;;semerro" cmd="cargo test"
+O teste abaixo falha porque <code>media</code> está errada (divide pelo número errado). Conserte a <strong>função</strong> (não o teste) dividindo pelo tamanho do slice, <code>v.len()</code>, e rode <code>cargo test</code> até passar.
 --- script
 fn media(v: &[f64]) -> f64 {
     v.iter().sum::<f64>() / 2.0

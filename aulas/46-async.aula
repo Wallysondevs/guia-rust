@@ -320,7 +320,7 @@ fn main() {
     println!("soma = {}", block_on(somar()));
 }
 :::
-::: missao goal="src:Poll::Pending;;out:pronto depois de 3 tentativas;;semerro"
+::: missao goal="src:wake_by_ref\(\);;out:pronto depois de 3 tentativas;;semerro"
 A future <code>Teimosa</code> deve responder <code>Poll::Pending</code> nas duas primeiras chamadas a <code>poll</code> (chamando <code>cx.waker().wake_by_ref()</code> para pedir outra chance) e <code>Poll::Ready</code> na terceira. Complete o <code>poll</code> para a saída ser <code>pronto depois de 3 tentativas</code>.
 --- script
 use std::future::Future;

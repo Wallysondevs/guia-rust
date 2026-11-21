@@ -186,7 +186,7 @@ fn main() {
     println!("{:?}", r.linhas.borrow());
 }
 :::
-::: missao goal="src:Rc::clone\(&placar\);;out:placar final: 30;;semerro"
+::: missao goal="src:jogador2\s*=\s*Rc::clone\(&placar\);;out:placar final: 30;;semerro"
 Dois jogadores compartilham um placar <code>Rc&lt;RefCell&lt;i32&gt;&gt;</code>. Crie <code>jogador2</code> com <code>Rc::clone(&amp;placar)</code>, faça cada jogador somar 10 e 20, e imprima <code>placar final: 30</code>.
 --- script
 use std::cell::RefCell;
