@@ -1,0 +1,240 @@
+---
+slug: erros-compilador
+menu: Erros comuns do compilador
+titulo: Erros comuns do compilador Rust — E0382, E0499, E0502, E0308, E0425, E0599 e mais | Guia Rust
+desc: Guia dos erros mais comuns do compilador Rust, cada um com a mensagem real, a causa em português e a correção: E0425, E0433, E0599, E0061, E0308, E0382, E0499, E0502, E0505, E0716, E0277, warnings e rustc --explain.
+h1: Erros comuns do <span class="hl">compilador</span>
+nivel: n2
+grupo: Qualidade
+---
+<p class="intro">Esta aula é uma coleção de “erros de propósito”: cada exemplo quebra uma regra, mostra a mensagem <strong>real</strong> do compilador e explica a correção. Guarde esta página para consultar quando um erro parecer misterioso.</p>
+<div class="note"><strong>Como ler uma mensagem do rustc</strong><ol>
+<li><code>error[E0382]</code>: o código do erro. <code>rustc --explain E0382</code> mostra uma explicação longa, com exemplos.</li>
+<li>A frase depois do código: o resumo do problema.</li>
+<li><code>--&gt; src/main.rs:4:20</code>: arquivo, linha e coluna.</li>
+<li>O desenho com <code>^^^</code> e <code>---</code>: o lugar principal e os lugares relacionados, cada um com uma etiqueta.</li>
+<li><code>help:</code> e <code>note:</code>: dicas, muitas vezes com o código já corrigido.</li>
+</ol></div>
+
+<hr>
+<h2>Nomes e caminhos</h2>
+<h3>E0425: nome que não existe</h3>
+::: exemplo e0425 falha
+fn main() {
+    let quantidade = 3;
+    println!("{}", quantidae * 2);
+}
+:::
+<p>Erro de digitação. O compilador procura nomes parecidos e sugere o certo.</p>
+<h3>E0599: método que não existe para o tipo</h3>
+::: exemplo e0599 falha
+fn main() {
+    let v = vec![3, 1, 2];
+    let n = v.size();
+    println!("{n}");
+}
+:::
+<p>Em Rust, o tamanho de um <code>Vec</code> é <code>len()</code>. A mensagem diz que não há <code>size</code> para <code>Vec</code> e sugere o nome parecido.</p>
+<h3>E0061: número errado de argumentos</h3>
+::: exemplo e0061 falha
+fn area(largura: f64, altura: f64) -> f64 {
+    largura * altura
+}
+
+fn main() {
+    println!("{}", area(3.0));
+}
+:::
+
+<hr>
+<h2>Tipos</h2>
+<h3>E0308: tipos que não combinam</h3>
+::: exemplo e0308 falha
+fn dobro(x: i32) -> i32 {
+    x * 2
+}
+
+fn main() {
+    let texto = "21";
+    println!("{}", dobro(texto));
+}
+:::
+<p>A função espera <code>i32</code> e recebeu <code>&amp;str</code>. Rust nunca converte texto em número sozinho: use <code>texto.parse::&lt;i32&gt;()</code>.</p>
+<h3>E0277: falta um trait</h3>
+::: exemplo e0277 falha
+fn main() {
+    let notas = vec![7, 8, 9];
+    println!("{}", notas);
+}
+:::
+<p>O <code>{}</code> exige o trait <code>Display</code>, e o <code>Vec</code> não tem um jeito “bonito” padrão de aparecer. A <code>note</code> sugere o <code>{:?}</code>, que usa o <code>Debug</code>.</p>
+<h3>E0369: operador que o tipo não tem</h3>
+::: exemplo e0369 falha
+struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let a = Ponto { x: 1, y: 2 };
+    let b = Ponto { x: 1, y: 2 };
+    println!("{}", a == b);
+}
+:::
+<p>Comparar com <code>==</code> exige o trait <code>PartialEq</code>. O <code>help</code> já mostra a correção: <code>#[derive(PartialEq)]</code> na struct.</p>
+
+<hr>
+<h2>Ownership e borrowing</h2>
+<h3>E0382: usar um valor depois de movê-lo</h3>
+::: exemplo e0382 falha
+fn main() {
+    let nomes = vec![String::from("Ana"), String::from("Bia")];
+    for n in nomes {
+        println!("{n}");
+    }
+    println!("{} nomes", nomes.len());
+}
+:::
+<p>O <code>for n in nomes</code> consome o vetor (chama <code>into_iter</code>). Para só percorrer, use <code>for n in &amp;nomes</code>; o próprio compilador sugere isso.</p>
+<h3>E0505: mover enquanto está emprestado</h3>
+::: exemplo e0505 falha
+fn consumir(s: String) {
+    println!("consumi {s}");
+}
+
+fn main() {
+    let s = String::from("dado");
+    let r = &s;
+    consumir(s);
+    println!("{r}");
+}
+:::
+<h3>E0716: referência para um valor temporário</h3>
+::: exemplo e0716 falha
+fn main() {
+    let palavra: &str = String::from("temporária").as_str();
+    println!("{palavra}");
+}
+:::
+<p>A <code>String</code> criada na linha é <strong>temporária</strong>: morre no fim da instrução, e a referência ficaria pendurada. Guarde a <code>String</code> numa variável primeiro: <code>let s = String::from("…"); let palavra = s.as_str();</code>.</p>
+
+<hr>
+<h2>Avisos (warnings) que valem atenção</h2>
+::: exemplo warnings
+fn main() {
+    let mut total = 10;
+    let sobra = 5;
+    println!("{total}");
+}
+:::
+<p>Dois avisos: <code>total</code> não precisava de <code>mut</code> e <code>sobra</code> nunca é usada. O programa compila e roda, mas cada aviso aponta código esquecido ou um engano de lógica. O <code>cargo clippy</code> (instalado com <code>rustup component add clippy</code>) dá centenas de dicas a mais.</p>
+
+<hr>
+<h2>Tabela de consulta</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Código</th><th>Resumo</th><th>Correção típica</th></tr>
+<tr><td>E0425</td><td>nome não encontrado</td><td>conferir a digitação, declarar, ou trazer com <code>use</code></td></tr>
+<tr><td>E0433</td><td>módulo ou crate não encontrado</td><td><code>cargo add</code> ou <code>use</code> correto</td></tr>
+<tr><td>E0599</td><td>método não existe para o tipo</td><td>conferir o nome; importar o trait que traz o método</td></tr>
+<tr><td>E0061</td><td>número de argumentos errado</td><td>conferir a assinatura</td></tr>
+<tr><td>E0308</td><td>tipos que não combinam</td><td>converter (<code>as</code>, <code>parse</code>), tirar o <code>;</code> do retorno</td></tr>
+<tr><td>E0277</td><td>tipo não implementa um trait</td><td><code>#[derive(…)]</code> ou <code>impl Trait for Tipo</code></td></tr>
+<tr><td>E0369</td><td>operador não aceito pelo tipo</td><td>restrição de trait (<code>T: PartialOrd</code>)</td></tr>
+<tr><td>E0384</td><td>atribuir duas vezes a imutável</td><td><code>let mut</code></td></tr>
+<tr><td>E0596</td><td>empréstimo mutável de algo imutável</td><td><code>let mut</code> / <code>&amp;mut</code></td></tr>
+<tr><td>E0382</td><td>uso depois de mover</td><td><code>&amp;</code>, <code>.clone()</code> ou reorganizar</td></tr>
+<tr><td>E0499</td><td>duas <code>&amp;mut</code> ao mesmo tempo</td><td>terminar um empréstimo antes do outro</td></tr>
+<tr><td>E0502</td><td><code>&amp;</code> e <code>&amp;mut</code> ao mesmo tempo</td><td>mudar a ordem; copiar o valor antes</td></tr>
+<tr><td>E0505</td><td>mover algo emprestado</td><td>usar a referência antes de mover</td></tr>
+<tr><td>E0597</td><td>valor não vive o suficiente</td><td>declarar o dono num escopo maior</td></tr>
+<tr><td>E0106</td><td>falta lifetime</td><td><code>&lt;'a&gt;</code> ou devolver um valor com dono</td></tr>
+<tr><td>E0004</td><td><code>match</code> não exaustivo</td><td>acrescentar o braço ou <code>_</code></td></tr>
+<tr><td>E0063</td><td>campo faltando na struct</td><td>preencher todos os campos</td></tr>
+<tr><td>E0603</td><td>item privado</td><td><code>pub</code></td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o comando que explica um erro em detalhes:
+$ rustc [[--explain]] E0382
+:::
+::: ex
+Complete para percorrer o vetor sem consumi-lo:
+for n in [[&]]nomes { }
+:::
+::: mc 2
+Qual erro aparece ao usar uma variável depois de movê-la?
+- E0308
+- E0382
+- E0425
+- E0004
+:::
+::: mc 4
+Um <code>warning</code> do compilador…
+- impede a compilação
+- só aparece no modo release
+- é sempre um falso alarme
+- não impede a compilação, mas costuma apontar código esquecido ou um engano
+:::
+::: missao goal="src:\.len\(\);;out:3 itens;;semerro"
+O programa abaixo dá E0599 (método inexistente). Conserte para imprimir <code>3 itens</code>.
+--- script
+fn main() {
+    let itens = vec!["a", "b", "c"];
+    println!("{} itens", itens.length());
+}
+--- solucao
+fn main() {
+    let itens = vec!["a", "b", "c"];
+    println!("{} itens", itens.len());
+}
+:::
+::: missao goal="src:for\s+\w+\s+in\s+&\w+;;out:Ana;;out:2 nomes;;semerro"
+O programa abaixo dá E0382: o <code>for</code> consome o vetor. Conserte percorrendo por referência, para imprimir os nomes e depois <code>2 nomes</code>.
+--- script
+fn main() {
+    let nomes = vec![String::from("Ana"), String::from("Bia")];
+    for n in nomes {
+        println!("{n}");
+    }
+    println!("{} nomes", nomes.len());
+}
+--- solucao
+fn main() {
+    let nomes = vec![String::from("Ana"), String::from("Bia")];
+    for n in &nomes {
+        println!("{n}");
+    }
+    println!("{} nomes", nomes.len());
+}
+:::
+::: missao goal="src:#\[derive\([^)]*PartialEq;;out:iguais: true;;semerro"
+O programa abaixo dá E0369 (o <code>==</code> não existe para <code>Cor</code>). Derive o trait que falta e imprima <code>iguais: true</code>.
+--- script
+struct Cor(u8, u8, u8);
+
+fn main() {
+    let a = Cor(255, 0, 0);
+    let b = Cor(255, 0, 0);
+    println!("iguais: {}", a == b);
+}
+--- solucao
+#[derive(PartialEq)]
+struct Cor(u8, u8, u8);
+
+fn main() {
+    let a = Cor(255, 0, 0);
+    let b = Cor(255, 0, 0);
+    println!("iguais: {}", a == b);
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Leia a mensagem inteira: código, frase, local, desenho e <code>help</code>.</li>
+<li><code>rustc --explain EXXXX</code> dá a explicação longa de qualquer erro.</li>
+<li>Os mais comuns são de nomes (E0425, E0599), tipos (E0308, E0277) e ownership (E0382, E0499, E0502).</li>
+<li>Warnings não impedem a compilação, mas merecem atenção; <code>cargo clippy</code> ajuda ainda mais.</li>
+</ul>

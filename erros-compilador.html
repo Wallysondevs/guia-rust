@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Erros comuns do compilador Rust — E0382, E0499, E0502, E0308, E0425, E0599 e mais | Guia Rust</title>
+<meta name="description" content="Guia dos erros mais comuns do compilador Rust, cada um com a mensagem real, a causa em português e a correção: E0425, E0433, E0599, E0061, E0308, E0382, E0499, E0502, E0505, E0716, E0277, warnings e rustc --explain.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Erros comuns do <span class="hl">compilador</span></h1>
+
+<p class="intro">Esta aula é uma coleção de “erros de propósito”: cada exemplo quebra uma regra, mostra a mensagem <strong>real</strong> do compilador e explica a correção. Guarde esta página para consultar quando um erro parecer misterioso.</p>
+<div class="note"><strong>Como ler uma mensagem do rustc</strong><ol>
+<li><code>error[E0382]</code>: o código do erro. <code>rustc --explain E0382</code> mostra uma explicação longa, com exemplos.</li>
+<li>A frase depois do código: o resumo do problema.</li>
+<li><code>--&gt; src/main.rs:4:20</code>: arquivo, linha e coluna.</li>
+<li>O desenho com <code>^^^</code> e <code>---</code>: o lugar principal e os lugares relacionados, cada um com uma etiqueta.</li>
+<li><code>help:</code> e <code>note:</code>: dicas, muitas vezes com o código já corrigido.</li>
+</ol></div>
+
+<hr>
+<h2>Nomes e caminhos</h2>
+<h3>E0425: nome que não existe</h3>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let quantidade = 3;
+    println!("{}", quantidae * 2);
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0425">$ cargo run
+   Compiling e0425 v0.1.0 (/home/ana/projetos/e0425)
+error[E0425]: cannot find value `quantidae` in this scope
+ --&gt; src/main.rs:3:20
+  |
+3 |     println!("{}", quantidae * 2);
+  |                    ^^^^^^^^^ not found in this scope
+  |
+help: a local variable with a similar name exists
+  |
+3 |     println!("{}", quantidade * 2);
+  |                            +
+
+For more information about this error, try `rustc --explain E0425`.
+error: could not compile `e0425` (bin "e0425") due to 1 previous error</pre>
+<p>Erro de digitação. O compilador procura nomes parecidos e sugere o certo.</p>
+<h3>E0599: método que não existe para o tipo</h3>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let v = vec![3, 1, 2];
+    let n = v.size();
+    println!("{n}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0599">$ cargo run
+   Compiling e0599 v0.1.0 (/home/ana/projetos/e0599)
+error[E0599]: no method named `size` found for struct `Vec&lt;{integer}&gt;` in the current scope
+ --&gt; src/main.rs:3:15
+  |
+3 |     let n = v.size();
+  |               ^^^^
+  |
+help: you might have meant to use `len`
+  |
+3 -     let n = v.size();
+3 +     let n = v.len();
+  |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `e0599` (bin "e0599") due to 1 previous error</pre>
+<p>Em Rust, o tamanho de um <code>Vec</code> é <code>len()</code>. A mensagem diz que não há <code>size</code> para <code>Vec</code> e sugere o nome parecido.</p>
+<h3>E0061: número errado de argumentos</h3>
+<pre class="file" data-file="src/main.rs">fn area(largura: f64, altura: f64) -&gt; f64 {
+    largura * altura
+}
+
+fn main() {
+    println!("{}", area(3.0));
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0061">$ cargo run
+   Compiling e0061 v0.1.0 (/home/ana/projetos/e0061)
+error[E0061]: this function takes 2 arguments but 1 argument was supplied
+ --&gt; src/main.rs:6:20
+  |
+6 |     println!("{}", area(3.0));
+  |                    ^^^^----- argument #2 of type `f64` is missing
+  |
+note: function defined here
+ --&gt; src/main.rs:1:4
+  |
+1 | fn area(largura: f64, altura: f64) -&gt; f64 {
+  |    ^^^^               -----------
+help: provide the argument
+  |
+6 |     println!("{}", area(3.0, /* f64 */));
+  |                            +++++++++++
+
+For more information about this error, try `rustc --explain E0061`.
+error: could not compile `e0061` (bin "e0061") due to 1 previous error</pre>
+
+<hr>
+<h2>Tipos</h2>
+<h3>E0308: tipos que não combinam</h3>
+<pre class="file" data-file="src/main.rs">fn dobro(x: i32) -&gt; i32 {
+    x * 2
+}
+
+fn main() {
+    let texto = "21";
+    println!("{}", dobro(texto));
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0308">$ cargo run
+   Compiling e0308 v0.1.0 (/home/ana/projetos/e0308)
+error[E0308]: mismatched types
+ --&gt; src/main.rs:7:26
+  |
+7 |     println!("{}", dobro(texto));
+  |                    ----- ^^^^^ expected `i32`, found `&amp;str`
+  |                    |
+  |                    arguments to this function are incorrect
+  |
+note: function defined here
+ --&gt; src/main.rs:1:4
+  |
+1 | fn dobro(x: i32) -&gt; i32 {
+  |    ^^^^^ ------
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `e0308` (bin "e0308") due to 1 previous error</pre>
+<p>A função espera <code>i32</code> e recebeu <code>&amp;str</code>. Rust nunca converte texto em número sozinho: use <code>texto.parse::&lt;i32&gt;()</code>.</p>
+<h3>E0277: falta um trait</h3>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let notas = vec![7, 8, 9];
+    println!("{}", notas);
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0277">$ cargo run
+   Compiling e0277 v0.1.0 (/home/ana/projetos/e0277)
+error[E0277]: `Vec&lt;{integer}&gt;` doesn't implement `std::fmt::Display`
+ --&gt; src/main.rs:3:20
+  |
+3 |     println!("{}", notas);
+  |               --   ^^^^^ `Vec&lt;{integer}&gt;` cannot be formatted with the default formatter
+  |               |
+  |               required by this formatting parameter
+  |
+  = help: the trait `std::fmt::Display` is not implemented for `Vec&lt;{integer}&gt;`
+  = note: in format strings you may be able to use `{:?}` (or `{:#?}` for pretty-print) instead
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `e0277` (bin "e0277") due to 1 previous error</pre>
+<p>O <code>{}</code> exige o trait <code>Display</code>, e o <code>Vec</code> não tem um jeito “bonito” padrão de aparecer. A <code>note</code> sugere o <code>{:?}</code>, que usa o <code>Debug</code>.</p>
+<h3>E0369: operador que o tipo não tem</h3>
+<pre class="file" data-file="src/main.rs">struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let a = Ponto { x: 1, y: 2 };
+    let b = Ponto { x: 1, y: 2 };
+    println!("{}", a == b);
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0369">$ cargo run
+   Compiling e0369 v0.1.0 (/home/ana/projetos/e0369)
+error[E0369]: binary operation `==` cannot be applied to type `Ponto`
+ --&gt; src/main.rs:9:22
+  |
+9 |     println!("{}", a == b);
+  |                    - ^^ - Ponto
+  |                    |
+  |                    Ponto
+  |
+note: an implementation of `PartialEq` might be missing for `Ponto`
+ --&gt; src/main.rs:1:1
+  |
+1 | struct Ponto {
+  | ^^^^^^^^^^^^ must implement `PartialEq`
+help: consider annotating `Ponto` with `#[derive(PartialEq)]`
+  |
+1 + #[derive(PartialEq)]
+2 | struct Ponto {
+  |
+
+For more information about this error, try `rustc --explain E0369`.
+error: could not compile `e0369` (bin "e0369") due to 1 previous error</pre>
+<p>Comparar com <code>==</code> exige o trait <code>PartialEq</code>. O <code>help</code> já mostra a correção: <code>#[derive(PartialEq)]</code> na struct.</p>
+
+<hr>
+<h2>Ownership e borrowing</h2>
+<h3>E0382: usar um valor depois de movê-lo</h3>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let nomes = vec![String::from("Ana"), String::from("Bia")];
+    for n in nomes {
+        println!("{n}");
+    }
+    println!("{} nomes", nomes.len());
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0382">$ cargo run
+   Compiling e0382 v0.1.0 (/home/ana/projetos/e0382)
+error[E0382]: borrow of moved value: `nomes`
+ --&gt; src/main.rs:6:26
+  |
+2 |     let nomes = vec![String::from("Ana"), String::from("Bia")];
+  |         ----- move occurs because `nomes` has type `Vec&lt;String&gt;`, which does not implement the `Copy` trait
+3 |     for n in nomes {
+  |              ----- `nomes` moved due to this implicit call to `.into_iter()`
+...
+6 |     println!("{} nomes", nomes.len());
+  |                          ^^^^^ value borrowed here after move
+  |
+note: the `for` loop is desugared into a call to `std::iter::IntoIterator::into_iter`, which takes ownership of the receiver `self`, which moves `nomes`
+ --&gt; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/iter/traits/collect.rs:312:17
+help: consider iterating over a slice of the `Vec&lt;String&gt;`'s content to avoid moving into the `for` loop
+  |
+3 |     for n in &amp;nomes {
+  |              +
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `e0382` (bin "e0382") due to 1 previous error</pre>
+<p>O <code>for n in nomes</code> consome o vetor (chama <code>into_iter</code>). Para só percorrer, use <code>for n in &amp;nomes</code>; o próprio compilador sugere isso.</p>
+<h3>E0505: mover enquanto está emprestado</h3>
+<pre class="file" data-file="src/main.rs">fn consumir(s: String) {
+    println!("consumi {s}");
+}
+
+fn main() {
+    let s = String::from("dado");
+    let r = &amp;s;
+    consumir(s);
+    println!("{r}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0505">$ cargo run
+   Compiling e0505 v0.1.0 (/home/ana/projetos/e0505)
+error[E0505]: cannot move out of `s` because it is borrowed
+ --&gt; src/main.rs:8:14
+  |
+6 |     let s = String::from("dado");
+  |         - binding `s` declared here
+7 |     let r = &amp;s;
+  |             -- borrow of `s` occurs here
+8 |     consumir(s);
+  |              ^ move out of `s` occurs here
+9 |     println!("{r}");
+  |                - borrow later used here
+  |
+help: consider cloning the value if the performance cost is acceptable
+  |
+7 |     let r = &amp;s.clone();
+  |               ++++++++
+
+For more information about this error, try `rustc --explain E0505`.
+error: could not compile `e0505` (bin "e0505") due to 1 previous error</pre>
+<h3>E0716: referência para um valor temporário</h3>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let palavra: &amp;str = String::from("temporária").as_str();
+    println!("{palavra}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/e0716">$ cargo run
+   Compiling e0716 v0.1.0 (/home/ana/projetos/e0716)
+error[E0716]: temporary value dropped while borrowed
+ --&gt; src/main.rs:2:25
+  |
+2 |     let palavra: &amp;str = String::from("temporária").as_str();
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^         - temporary value is freed at the end of this statement
+  |                         |
+  |                         creates a temporary value which is freed while still in use
+3 |     println!("{palavra}");
+  |                ------- borrow later used here
+  |
+help: consider using a `let` binding to create a longer lived value
+  |
+2 ~     let binding = String::from("temporária");
+3 ~     let palavra: &amp;str = binding.as_str();
+  |
+
+For more information about this error, try `rustc --explain E0716`.
+error: could not compile `e0716` (bin "e0716") due to 1 previous error</pre>
+<p>A <code>String</code> criada na linha é <strong>temporária</strong>: morre no fim da instrução, e a referência ficaria pendurada. Guarde a <code>String</code> numa variável primeiro: <code>let s = String::from("…"); let palavra = s.as_str();</code>.</p>
+
+<hr>
+<h2>Avisos (warnings) que valem atenção</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut total = 10;
+    let sobra = 5;
+    println!("{total}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/warnings">$ cargo run
+   Compiling warnings v0.1.0 (/home/ana/projetos/warnings)
+warning: variable does not need to be mutable
+ --&gt; src/main.rs:2:9
+  |
+2 |     let mut total = 10;
+  |         ----^^^^^
+  |         |
+  |         help: remove this `mut`
+  |
+  = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `sobra`
+ --&gt; src/main.rs:3:9
+  |
+3 |     let sobra = 5;
+  |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_sobra`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `warnings` (bin "warnings") generated 2 warnings (run `cargo fix --bin "warnings" -p warnings` to apply 2 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/warnings`
+10</pre>
+<p>Dois avisos: <code>total</code> não precisava de <code>mut</code> e <code>sobra</code> nunca é usada. O programa compila e roda, mas cada aviso aponta código esquecido ou um engano de lógica. O <code>cargo clippy</code> (instalado com <code>rustup component add clippy</code>) dá centenas de dicas a mais.</p>
+
+<hr>
+<h2>Tabela de consulta</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Código</th><th>Resumo</th><th>Correção típica</th></tr>
+<tr><td>E0425</td><td>nome não encontrado</td><td>conferir a digitação, declarar, ou trazer com <code>use</code></td></tr>
+<tr><td>E0433</td><td>módulo ou crate não encontrado</td><td><code>cargo add</code> ou <code>use</code> correto</td></tr>
+<tr><td>E0599</td><td>método não existe para o tipo</td><td>conferir o nome; importar o trait que traz o método</td></tr>
+<tr><td>E0061</td><td>número de argumentos errado</td><td>conferir a assinatura</td></tr>
+<tr><td>E0308</td><td>tipos que não combinam</td><td>converter (<code>as</code>, <code>parse</code>), tirar o <code>;</code> do retorno</td></tr>
+<tr><td>E0277</td><td>tipo não implementa um trait</td><td><code>#[derive(…)]</code> ou <code>impl Trait for Tipo</code></td></tr>
+<tr><td>E0369</td><td>operador não aceito pelo tipo</td><td>restrição de trait (<code>T: PartialOrd</code>)</td></tr>
+<tr><td>E0384</td><td>atribuir duas vezes a imutável</td><td><code>let mut</code></td></tr>
+<tr><td>E0596</td><td>empréstimo mutável de algo imutável</td><td><code>let mut</code> / <code>&amp;mut</code></td></tr>
+<tr><td>E0382</td><td>uso depois de mover</td><td><code>&amp;</code>, <code>.clone()</code> ou reorganizar</td></tr>
+<tr><td>E0499</td><td>duas <code>&amp;mut</code> ao mesmo tempo</td><td>terminar um empréstimo antes do outro</td></tr>
+<tr><td>E0502</td><td><code>&amp;</code> e <code>&amp;mut</code> ao mesmo tempo</td><td>mudar a ordem; copiar o valor antes</td></tr>
+<tr><td>E0505</td><td>mover algo emprestado</td><td>usar a referência antes de mover</td></tr>
+<tr><td>E0597</td><td>valor não vive o suficiente</td><td>declarar o dono num escopo maior</td></tr>
+<tr><td>E0106</td><td>falta lifetime</td><td><code>&lt;'a&gt;</code> ou devolver um valor com dono</td></tr>
+<tr><td>E0004</td><td><code>match</code> não exaustivo</td><td>acrescentar o braço ou <code>_</code></td></tr>
+<tr><td>E0063</td><td>campo faltando na struct</td><td>preencher todos os campos</td></tr>
+<tr><td>E0603</td><td>item privado</td><td><code>pub</code></td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete o comando que explica um erro em detalhes:</p><div class="ex-code">$ rustc <input data-answer="--explain" aria-label="resposta"> E0382</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para percorrer o vetor sem consumi-lo:</p><div class="ex-code">for n in <input data-answer="&amp;" aria-label="resposta">nomes { }</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Qual erro aparece ao usar uma variável depois de movê-la?</p>
+<label><input type="radio" name="q1"> E0308</label>
+<label><input type="radio" name="q1"> E0382</label>
+<label><input type="radio" name="q1"> E0425</label>
+<label><input type="radio" name="q1"> E0004</label></div>
+<div class="mc" data-answer="4"><p class="mc-q">Um <code>warning</code> do compilador…</p>
+<label><input type="radio" name="q2"> impede a compilação</label>
+<label><input type="radio" name="q2"> só aparece no modo release</label>
+<label><input type="radio" name="q2"> é sempre um falso alarme</label>
+<label><input type="radio" name="q2"> não impede a compilação, mas costuma apontar código esquecido ou um engano</label></div>
+<div class="trycmd" data-goal="src:\.len\(\);;out:3 itens;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0599 (método inexistente). Conserte para imprimir <code>3 itens</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let itens = vec!["a", "b", "c"];
+    println!("{} itens", itens.length());
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let itens = vec!["a", "b", "c"];
+    println!("{} itens", itens.len());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/missao`
+3 itens
+</pre>
+</div>
+<div class="trycmd" data-goal="src:for\s+\w+\s+in\s+&amp;\w+;;out:Ana;;out:2 nomes;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0382: o <code>for</code> consome o vetor. Conserte percorrendo por referência, para imprimir os nomes e depois <code>2 nomes</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let nomes = vec![String::from("Ana"), String::from("Bia")];
+    for n in nomes {
+        println!("{n}");
+    }
+    println!("{} nomes", nomes.len());
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let nomes = vec![String::from("Ana"), String::from("Bia")];
+    for n in &amp;nomes {
+        println!("{n}");
+    }
+    println!("{} nomes", nomes.len());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/missao`
+Ana
+Bia
+2 nomes
+</pre>
+</div>
+<div class="trycmd" data-goal="src:#\[derive\([^)]*PartialEq;;out:iguais: true;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0369 (o <code>==</code> não existe para <code>Cor</code>). Derive o trait que falta e imprima <code>iguais: true</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Cor(u8, u8, u8);
+
+fn main() {
+    let a = Cor(255, 0, 0);
+    let b = Cor(255, 0, 0);
+    println!("iguais: {}", a == b);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+#[derive(PartialEq)]
+struct Cor(u8, u8, u8);
+
+fn main() {
+    let a = Cor(255, 0, 0);
+    let b = Cor(255, 0, 0);
+    println!("iguais: {}", a == b);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+iguais: true
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Leia a mensagem inteira: código, frase, local, desenho e <code>help</code>.</li>
+<li><code>rustc --explain EXXXX</code> dá a explicação longa de qualquer erro.</li>
+<li>Os mais comuns são de nomes (E0425, E0599), tipos (E0308, E0277) e ownership (E0382, E0499, E0502).</li>
+<li>Warnings não impedem a compilação, mas merecem atenção; <code>cargo clippy</code> ajuda ainda mais.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

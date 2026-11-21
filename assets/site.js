@@ -56,7 +56,8 @@ var NIVEIS = [
       ["iteradores.html", "Iteradores"]
     ]},
     { grupo: "Qualidade", itens: [
-      ["testes.html", "Testes com cargo test"]
+      ["testes.html", "Testes com cargo test"],
+      ["erros-compilador.html", "Erros comuns do compilador"]
     ]}
   ]}
 ];
