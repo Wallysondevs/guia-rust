@@ -1,0 +1,219 @@
+---
+slug: closures
+menu: Closures
+titulo: Closures em Rust — |x| x + 1, captura, move, Fn, FnMut e FnOnce | Guia Rust
+desc: Closures em Rust: funções anônimas com |parâmetros|, inferência de tipos, captura do ambiente por referência e por move, os traits Fn, FnMut e FnOnce, closures como parâmetro e como retorno, sort_by_key e o erro de mudar uma closure não mut.
+h1: <span class="hl">Closures</span>
+nivel: n2
+grupo: Abstração
+---
+<p class="intro">Uma <strong>closure</strong> é uma função sem nome que você escreve no meio do código e guarda numa variável ou passa para outra função. Ela pode usar as variáveis do lugar onde foi criada: isso se chama <strong>capturar o ambiente</strong>. Você já viu closures em <code>unwrap_or_else(|| …)</code> e <code>retain(|x| …)</code>.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A sintaxe <code>|parâmetros| expressão</code> e a inferência de tipos.</li>
+<li>Como a closure captura variáveis (por referência, por referência mutável ou com <code>move</code>).</li>
+<li>Os traits <code>Fn</code>, <code>FnMut</code> e <code>FnOnce</code>, e funções que recebem ou devolvem closures.</li>
+</ul></div>
+
+<hr>
+<h2>1. A sintaxe</h2>
+::: exemplo sintaxe
+fn main() {
+    let dobro = |x| x * 2;
+    let soma = |a: i32, b: i32| -> i32 { a + b };
+    let ola = || println!("olá de uma closure");
+    println!("{}", dobro(21));
+    println!("{}", soma(2, 3));
+    ola();
+}
+:::
+<p>Os parâmetros ficam entre barras <code>| |</code>. Os tipos são opcionais: o compilador deduz pelo uso. Com uma expressão só, as chaves também são opcionais.</p>
+
+<hr>
+<h2>2. Capturando o ambiente</h2>
+::: exemplo captura
+fn main() {
+    let taxa = 0.1;
+    let com_taxa = |valor: f64| valor * (1.0 + taxa);
+    println!("{:.2}", com_taxa(100.0));
+
+    let mut cliques = 0;
+    let mut clicar = || {
+        cliques += 1;
+        println!("clique {cliques}");
+    };
+    clicar();
+    clicar();
+    println!("total: {cliques}");
+}
+:::
+<p><code>com_taxa</code> lê <code>taxa</code> (empresta com <code>&amp;</code>). <code>clicar</code> muda <code>cliques</code> (empresta com <code>&amp;mut</code>), por isso a própria closure precisa ser <code>let mut</code>. Depois do último uso de <code>clicar</code>, <code>cliques</code> fica livre de novo para o <code>println!</code>.</p>
+::: exemplo captura-erro falha
+fn main() {
+    let mut contador = 0;
+    let incrementar = || contador += 1;
+    incrementar();
+    println!("{contador}");
+}
+:::
+<p>A closure muda algo capturado, então chamá-la precisa de acesso mutável à própria closure: falta o <code>mut</code> em <code>let mut incrementar</code>. O compilador mostra exatamente isso.</p>
+
+<hr>
+<h2>3. <code>move</code>: levar as variáveis junto</h2>
+::: exemplo move
+fn criar_saudacao(nome: String) -> impl Fn() -> String {
+    move || format!("Olá, {nome}!")
+}
+
+fn main() {
+    let saudar = criar_saudacao(String::from("Ana"));
+    println!("{}", saudar());
+    println!("{}", saudar());
+
+    let lista = vec![1, 2, 3];
+    let mostrar = move || println!("{:?}", lista);
+    mostrar();
+}
+:::
+<p>Com <code>move</code>, a closure vira <strong>dona</strong> do que captura. Isso é obrigatório quando a closure vai viver mais que a função que a criou (como em <code>criar_saudacao</code>) e quando ela vai para outra thread (Nível 3). Depois do <code>move</code>, <code>lista</code> não pode mais ser usada fora da closure.</p>
+
+<hr>
+<h2>4. <code>Fn</code>, <code>FnMut</code>, <code>FnOnce</code></h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Trait</th><th>A closure…</th><th>Pode chamar</th></tr>
+<tr><td><code>Fn</code></td><td>só lê o que capturou</td><td>várias vezes</td></tr>
+<tr><td><code>FnMut</code></td><td>muda o que capturou</td><td>várias vezes (precisa de <code>mut</code>)</td></tr>
+<tr><td><code>FnOnce</code></td><td>consome (move para fora) o que capturou</td><td>uma vez só</td></tr>
+</table></div>
+::: exemplo traits
+fn aplicar_duas_vezes<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 {
+    f(f(x))
+}
+
+fn repetir<F: FnMut()>(mut f: F, vezes: u32) {
+    for _ in 0..vezes {
+        f();
+    }
+}
+
+fn executar_uma_vez<F: FnOnce() -> String>(f: F) -> String {
+    f()
+}
+
+fn main() {
+    println!("{}", aplicar_duas_vezes(|n| n + 10, 1));
+    let mut log = Vec::new();
+    repetir(|| log.push("tic"), 3);
+    println!("{:?}", log);
+    let dono = String::from("posse");
+    println!("{}", executar_uma_vez(move || dono));
+}
+:::
+
+<hr>
+<h2>5. Closures nas coleções</h2>
+::: exemplo colecoes
+#[derive(Debug)]
+struct Aluno {
+    nome: &'static str,
+    nota: u32,
+}
+
+fn main() {
+    let mut turma = vec![
+        Aluno { nome: "Caio", nota: 7 },
+        Aluno { nome: "Ana", nota: 9 },
+        Aluno { nome: "Bia", nota: 8 },
+    ];
+    turma.sort_by_key(|a| a.nota);
+    println!("{:?}", turma.iter().map(|a| a.nome).collect::<Vec<_>>());
+    turma.sort_by(|a, b| a.nome.cmp(b.nome));
+    println!("{:?}", turma.iter().map(|a| a.nome).collect::<Vec<_>>());
+    let minima = 8;
+    turma.retain(|a| a.nota >= minima);
+    println!("{:?}", turma);
+}
+:::
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete a closure que soma 1:
+let mais_um = [[|x|]] x + 1;
+:::
+::: ex
+Complete para a closure virar dona do que captura:
+let f = [[move]] || println!("{nome}");
+:::
+::: mc 3
+Uma closure que muda uma variável capturada implementa qual trait?
+- <code>Fn</code>
+- <code>FnOnce</code> apenas
+- <code>FnMut</code>
+- <code>Copy</code>
+:::
+::: mc 1
+Quando o <code>move</code> é obrigatório?
+- Quando a closure precisa viver mais que as variáveis que captura (por exemplo, ao ser devolvida ou enviada para outra thread)
+- Sempre
+- Só com números
+- Nunca, é só estilo
+:::
+::: missao goal="src:let\s+\w+\s*=\s*\|;;out:Com desconto: 85.00"
+Crie uma closure <code>aplicar_desconto</code> que captura <code>let desconto = 0.15;</code> e recebe um preço. Imprima <code>Com desconto: 85.00</code> para o preço <code>100.0</code>.
+--- script
+fn main() {
+    let desconto = 0.15;
+}
+--- solucao
+fn main() {
+    let desconto = 0.15;
+    let aplicar_desconto = |preco: f64| preco * (1.0 - desconto);
+    println!("Com desconto: {:.2}", aplicar_desconto(100.0));
+}
+:::
+::: missao goal="src:let\s+mut\s+\w+\s*=\s*\|\|;;out:passos: 3;;semerro"
+O programa abaixo não compila: a closure muda <code>passos</code> mas não é <code>mut</code>. Conserte e rode para imprimir <code>passos: 3</code>.
+--- script
+fn main() {
+    let mut passos = 0;
+    let andar = || passos += 1;
+    andar();
+    andar();
+    andar();
+    println!("passos: {passos}");
+}
+--- solucao
+fn main() {
+    let mut passos = 0;
+    let mut andar = || passos += 1;
+    andar();
+    andar();
+    andar();
+    println!("passos: {passos}");
+}
+:::
+::: missao goal="src:impl\s+Fn\(\s*i32\s*\)\s*->\s*i32;;src:\bmove\b;;out:triplo de 7: 21;;out:vezes 10 de 7: 70"
+Escreva <code>fn multiplicador(fator: i32) -&gt; impl Fn(i32) -&gt; i32</code> que devolve <code>move |x| x * fator</code>. Crie <code>triplo</code> e <code>vezes10</code> e imprima <code>triplo de 7: 21</code> e <code>vezes 10 de 7: 70</code>.
+--- script
+fn main() {
+}
+--- solucao
+fn multiplicador(fator: i32) -> impl Fn(i32) -> i32 {
+    move |x| x * fator
+}
+
+fn main() {
+    let triplo = multiplicador(3);
+    let vezes10 = multiplicador(10);
+    println!("triplo de 7: {}", triplo(7));
+    println!("vezes 10 de 7: {}", vezes10(7));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>|a, b| a + b</code> cria uma closure; tipos são opcionais.</li>
+<li>Closures capturam variáveis por <code>&amp;</code>, <code>&amp;mut</code> (precisa de <code>let mut</code>) ou, com <code>move</code>, por posse.</li>
+<li><code>Fn</code> lê, <code>FnMut</code> muda, <code>FnOnce</code> consome; use-os como restrição em funções genéricas.</li>
+</ul>

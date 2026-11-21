@@ -50,7 +50,9 @@ var NIVEIS = [
     ]},
     { grupo: "Abstração", itens: [
       ["traits.html", "Traits"],
-      ["generics.html", "Generics"]
+      ["generics.html", "Generics"],
+      ["lifetimes.html", "Lifetimes"],
+      ["closures.html", "Closures"]
     ]}
   ]}
 ];

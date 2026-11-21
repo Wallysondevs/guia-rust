@@ -1,0 +1,217 @@
+---
+slug: lifetimes
+menu: Lifetimes
+titulo: Lifetimes em Rust — 'a, o erro E0106, E0597 e structs com referências | Guia Rust
+desc: Lifetimes em Rust sem mistério: por que o compilador pede 'a (E0106), como anotar funções que devolvem referências, o erro E0597 (does not live long enough), structs que guardam referências, as regras de elisão e 'static.
+h1: <span class="hl">Lifetimes</span>
+nivel: n2
+grupo: Abstração
+---
+<p class="intro">Um <strong>lifetime</strong> (tempo de vida) é o trecho do programa em que uma referência é válida. O compilador confere os lifetimes sempre, mas quase sempre descobre sozinho. Às vezes ele não consegue adivinhar a relação entre as referências e pede que você a escreva com um nome como <code>'a</code>. Anotar não muda quanto tempo nada vive: só <strong>explica</strong> ao compilador o que já é verdade.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>Por que o compilador pede um lifetime (E0106) e como anotar com <code>'a</code>.</li>
+<li>O erro E0597 (<em>does not live long enough</em>) e o que ele protege.</li>
+<li>Structs com referências, as regras de elisão e o <code>'static</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. O problema</h2>
+::: exemplo sem-lifetime falha
+fn mais_longa(a: &str, b: &str) -> &str {
+    if a.len() >= b.len() { a } else { b }
+}
+
+fn main() {
+    println!("{}", mais_longa("Rust", "Python"));
+}
+:::
+<p>A função devolve uma referência, mas para <strong>qual</strong> dos dois textos? Depende da execução. O compilador precisa saber por quanto tempo o resultado vale, e a assinatura não diz. O <code>help</code> sugere a anotação.</p>
+
+<hr>
+<h2>2. Anotando com <code>'a</code></h2>
+::: exemplo com-lifetime
+fn mais_longa<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() >= b.len() { a } else { b }
+}
+
+fn main() {
+    let s1 = String::from("abacaxi");
+    let resultado;
+    {
+        let s2 = String::from("kiwi");
+        resultado = mais_longa(&s1, &s2);
+        println!("dentro: {resultado}");
+    }
+    println!("fim");
+}
+:::
+<dl class="anatomy"><dt>&lt;'a&gt;</dt><dd>declara um lifetime chamado <code>'a</code> (como um generic).</dd><dt>a: &amp;'a str, b: &amp;'a str</dt><dd>as duas entradas vivem pelo menos durante <code>'a</code>.</dd><dt>-&gt; &amp;'a str</dt><dd>o resultado vale enquanto as duas entradas valerem.</dd></dl>
+<p>Na prática, <code>'a</code> vira o <strong>menor</strong> dos dois tempos de vida. Por isso o uso dentro do bloco funciona.</p>
+
+<hr>
+<h2>3. Quando dá errado: E0597</h2>
+<p>Agora, usando o resultado <strong>depois</strong> que <code>s2</code> morreu:</p>
+::: exemplo e0597 falha
+fn mais_longa<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() >= b.len() { a } else { b }
+}
+
+fn main() {
+    let s1 = String::from("abacaxi");
+    let resultado;
+    {
+        let s2 = String::from("kiwi");
+        resultado = mais_longa(&s1, &s2);
+    }
+    println!("{resultado}");
+}
+:::
+<p>Neste caso, o resultado seria <code>s1</code> (o maior), que ainda existe. Mas o compilador não roda o programa: pela assinatura, o resultado pode ser <code>s2</code>, que morreu no <code>}</code>. Ele recusa o código que <strong>poderia</strong> usar memória liberada. Esse é o erro <strong>E0597</strong>, <em>borrowed value does not live long enough</em>.</p>
+
+<hr>
+<h2>4. Structs que guardam referências</h2>
+::: exemplo struct-ref
+struct Trecho<'a> {
+    texto: &'a str,
+}
+
+impl<'a> Trecho<'a> {
+    fn primeira_palavra(&self) -> &'a str {
+        self.texto.split_whitespace().next().unwrap_or("")
+    }
+}
+
+fn main() {
+    let livro = String::from("Era uma vez um caranguejo. Ele gostava de Rust.");
+    let primeira_frase = livro.split('.').next().unwrap();
+    let t = Trecho { texto: primeira_frase };
+    println!("trecho: '{}'", t.texto);
+    println!("primeira palavra: {}", t.primeira_palavra());
+}
+:::
+<p>Uma struct com referência precisa do lifetime: <code>Trecho&lt;'a&gt;</code> significa “um <code>Trecho</code> não pode viver mais que o texto que ele empresta”. Se você tentar guardar o <code>Trecho</code> depois que <code>livro</code> morreu, é erro de compilação.</p>
+
+<hr>
+<h2>5. Quando não precisa anotar: elisão</h2>
+<p>Na maioria das funções você não escreve lifetimes, porque o compilador aplica três regras (<em>elisão</em>):</p>
+<ol>
+<li>Cada parâmetro referência ganha o seu próprio lifetime.</li>
+<li>Se há <strong>um só</strong> parâmetro referência, o retorno usa o lifetime dele.</li>
+<li>Se um dos parâmetros é <code>&amp;self</code> ou <code>&amp;mut self</code>, o retorno usa o lifetime de <code>self</code>.</li>
+</ol>
+::: exemplo elisao
+fn primeira(s: &str) -> &str {
+    s.split(' ').next().unwrap_or(s)
+}
+
+const SAUDACAO: &'static str = "olá";
+
+fn main() {
+    println!("{}", primeira("bom dia"));
+    let fixo: &'static str = "texto gravado no programa";
+    println!("{fixo} / {SAUDACAO}");
+}
+:::
+<p><code>primeira</code> tem um parâmetro só, então a regra 2 resolve. O <code>'static</code> é o lifetime especial de quem vive o programa inteiro, como os literais de texto. Cuidado com a tentação de colocar <code>'static</code> para calar o compilador: quase sempre o certo é devolver um valor com dono (<code>String</code>).</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete a declaração do lifetime:
+fn maior[[<'a>]](x: &'a str, y: &'a str) -> &'a str { x }
+:::
+::: ex
+Complete o lifetime de quem vive o programa inteiro:
+let s: &[['static]] str = "fixo";
+:::
+::: mc 2
+Anotar um lifetime <code>'a</code>…
+- faz a variável viver mais tempo
+- só descreve ao compilador a relação entre as referências; não muda quanto nada vive
+- libera a memória mais cedo
+- transforma a referência em <code>String</code>
+:::
+::: mc 4
+Por que <code>fn primeira(s: &amp;str) -&gt; &amp;str</code> não precisa de anotação?
+- Porque <code>&amp;str</code> nunca precisa
+- Porque é <code>'static</code>
+- Porque a função é pequena
+- Porque há um só parâmetro referência, e a regra de elisão liga o retorno a ele
+:::
+::: missao goal="src:fn\s+\w+\s*<'a>\s*\([^)]*&'a\s+str[^)]*&'a\s+str[^)]*\)\s*->\s*&'a\s+str;;out:Mais curta: sol"
+Escreva <code>fn mais_curta&lt;'a&gt;(a: &amp;'a str, b: &amp;'a str) -&gt; &amp;'a str</code> e imprima <code>Mais curta: sol</code> para <code>"girassol"</code> e <code>"sol"</code>.
+--- script
+fn mais_curta(a: &str, b: &str) -> &str {
+    if a.len() <= b.len() { a } else { b }
+}
+
+fn main() {
+    println!("Mais curta: {}", mais_curta("girassol", "sol"));
+}
+--- solucao
+fn mais_curta<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() <= b.len() { a } else { b }
+}
+
+fn main() {
+    println!("Mais curta: {}", mais_curta("girassol", "sol"));
+}
+:::
+::: missao goal="src:struct\s+Destaque\s*<'a>;;src:&'a\s+str;;out:Destaque: Rust"
+Crie <code>struct Destaque&lt;'a&gt; { palavra: &amp;'a str }</code>. A partir da String <code>"Aprendendo Rust hoje"</code>, guarde a segunda palavra numa instância e imprima <code>Destaque: Rust</code>.
+--- script
+fn main() {
+    let frase = String::from("Aprendendo Rust hoje");
+}
+--- solucao
+struct Destaque<'a> {
+    palavra: &'a str,
+}
+
+fn main() {
+    let frase = String::from("Aprendendo Rust hoje");
+    let segunda = frase.split_whitespace().nth(1).unwrap();
+    let d = Destaque { palavra: segunda };
+    println!("Destaque: {}", d.palavra);
+}
+:::
+::: missao goal="src:\{resultado\}\x22\);\s*\n\s*\}\s*\n\s*\};;out:resultado: abacaxi;;semerro"
+O programa abaixo dá E0597. Sem mudar a função, mova o <code>println!</code> para <strong>dentro</strong> do bloco, onde <code>s2</code> ainda vive, e rode.
+--- script
+fn mais_longa<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() >= b.len() { a } else { b }
+}
+
+fn main() {
+    let s1 = String::from("abacaxi");
+    let resultado;
+    {
+        let s2 = String::from("kiwi");
+        resultado = mais_longa(&s1, &s2);
+    }
+    println!("resultado: {resultado}");
+}
+--- solucao
+fn mais_longa<'a>(a: &'a str, b: &'a str) -> &'a str {
+    if a.len() >= b.len() { a } else { b }
+}
+
+fn main() {
+    let s1 = String::from("abacaxi");
+    let resultado;
+    {
+        let s2 = String::from("kiwi");
+        resultado = mais_longa(&s1, &s2);
+        println!("resultado: {resultado}");
+    }
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Lifetime = por quanto tempo uma referência vale; anotar só descreve, não estende.</li>
+<li>Funções que devolvem referência de várias entradas precisam de <code>'a</code> (E0106).</li>
+<li>Usar uma referência depois que o dono morreu é o E0597.</li>
+<li>Structs com referências levam <code>&lt;'a&gt;</code>; <code>'static</code> é o programa inteiro.</li>
+</ul>

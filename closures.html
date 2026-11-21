@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Closures em Rust — |x| x + 1, captura, move, Fn, FnMut e FnOnce | Guia Rust</title>
+<meta name="description" content="Closures em Rust: funções anônimas com |parâmetros|, inferência de tipos, captura do ambiente por referência e por move, os traits Fn, FnMut e FnOnce, closures como parâmetro e como retorno, sort_by_key e o erro de mudar uma closure não mut.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Closures</span></h1>
+
+<p class="intro">Uma <strong>closure</strong> é uma função sem nome que você escreve no meio do código e guarda numa variável ou passa para outra função. Ela pode usar as variáveis do lugar onde foi criada: isso se chama <strong>capturar o ambiente</strong>. Você já viu closures em <code>unwrap_or_else(|| …)</code> e <code>retain(|x| …)</code>.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A sintaxe <code>|parâmetros| expressão</code> e a inferência de tipos.</li>
+<li>Como a closure captura variáveis (por referência, por referência mutável ou com <code>move</code>).</li>
+<li>Os traits <code>Fn</code>, <code>FnMut</code> e <code>FnOnce</code>, e funções que recebem ou devolvem closures.</li>
+</ul></div>
+
+<hr>
+<h2>1. A sintaxe</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let dobro = |x| x * 2;
+    let soma = |a: i32, b: i32| -&gt; i32 { a + b };
+    let ola = || println!("olá de uma closure");
+    println!("{}", dobro(21));
+    println!("{}", soma(2, 3));
+    ola();
+}</pre>
+<pre class="term" data-cwd="~/projetos/sintaxe">$ cargo run
+   Compiling sintaxe v0.1.0 (/home/ana/projetos/sintaxe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/sintaxe`
+42
+5
+olá de uma closure</pre>
+<p>Os parâmetros ficam entre barras <code>| |</code>. Os tipos são opcionais: o compilador deduz pelo uso. Com uma expressão só, as chaves também são opcionais.</p>
+
+<hr>
+<h2>2. Capturando o ambiente</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let taxa = 0.1;
+    let com_taxa = |valor: f64| valor * (1.0 + taxa);
+    println!("{:.2}", com_taxa(100.0));
+
+    let mut cliques = 0;
+    let mut clicar = || {
+        cliques += 1;
+        println!("clique {cliques}");
+    };
+    clicar();
+    clicar();
+    println!("total: {cliques}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/captura">$ cargo run
+   Compiling captura v0.1.0 (/home/ana/projetos/captura)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/captura`
+110.00
+clique 1
+clique 2
+total: 2</pre>
+<p><code>com_taxa</code> lê <code>taxa</code> (empresta com <code>&amp;</code>). <code>clicar</code> muda <code>cliques</code> (empresta com <code>&amp;mut</code>), por isso a própria closure precisa ser <code>let mut</code>. Depois do último uso de <code>clicar</code>, <code>cliques</code> fica livre de novo para o <code>println!</code>.</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut contador = 0;
+    let incrementar = || contador += 1;
+    incrementar();
+    println!("{contador}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/captura-erro">$ cargo run
+   Compiling captura-erro v0.1.0 (/home/ana/projetos/captura-erro)
+error[E0596]: cannot borrow `incrementar` as mutable, as it is not declared as mutable
+ --&gt; src/main.rs:4:5
+  |
+3 |     let incrementar = || contador += 1;
+  |                          -------- calling `incrementar` requires mutable binding due to mutable borrow of `contador`
+4 |     incrementar();
+  |     ^^^^^^^^^^^ cannot borrow as mutable
+  |
+help: consider changing this to be mutable
+  |
+3 |     let mut incrementar = || contador += 1;
+  |         +++
+
+For more information about this error, try `rustc --explain E0596`.
+error: could not compile `captura-erro` (bin "captura-erro") due to 1 previous error</pre>
+<p>A closure muda algo capturado, então chamá-la precisa de acesso mutável à própria closure: falta o <code>mut</code> em <code>let mut incrementar</code>. O compilador mostra exatamente isso.</p>
+
+<hr>
+<h2>3. <code>move</code>: levar as variáveis junto</h2>
+<pre class="file" data-file="src/main.rs">fn criar_saudacao(nome: String) -&gt; impl Fn() -&gt; String {
+    move || format!("Olá, {nome}!")
+}
+
+fn main() {
+    let saudar = criar_saudacao(String::from("Ana"));
+    println!("{}", saudar());
+    println!("{}", saudar());
+
+    let lista = vec![1, 2, 3];
+    let mostrar = move || println!("{:?}", lista);
+    mostrar();
+}</pre>
+<pre class="term" data-cwd="~/projetos/move">$ cargo run
+   Compiling move v0.1.0 (/home/ana/projetos/move)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/move`
+Olá, Ana!
+Olá, Ana!
+[1, 2, 3]</pre>
+<p>Com <code>move</code>, a closure vira <strong>dona</strong> do que captura. Isso é obrigatório quando a closure vai viver mais que a função que a criou (como em <code>criar_saudacao</code>) e quando ela vai para outra thread (Nível 3). Depois do <code>move</code>, <code>lista</code> não pode mais ser usada fora da closure.</p>
+
+<hr>
+<h2>4. <code>Fn</code>, <code>FnMut</code>, <code>FnOnce</code></h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Trait</th><th>A closure…</th><th>Pode chamar</th></tr>
+<tr><td><code>Fn</code></td><td>só lê o que capturou</td><td>várias vezes</td></tr>
+<tr><td><code>FnMut</code></td><td>muda o que capturou</td><td>várias vezes (precisa de <code>mut</code>)</td></tr>
+<tr><td><code>FnOnce</code></td><td>consome (move para fora) o que capturou</td><td>uma vez só</td></tr>
+</table></div>
+<pre class="file" data-file="src/main.rs">fn aplicar_duas_vezes&lt;F: Fn(i32) -&gt; i32&gt;(f: F, x: i32) -&gt; i32 {
+    f(f(x))
+}
+
+fn repetir&lt;F: FnMut()&gt;(mut f: F, vezes: u32) {
+    for _ in 0..vezes {
+        f();
+    }
+}
+
+fn executar_uma_vez&lt;F: FnOnce() -&gt; String&gt;(f: F) -&gt; String {
+    f()
+}
+
+fn main() {
+    println!("{}", aplicar_duas_vezes(|n| n + 10, 1));
+    let mut log = Vec::new();
+    repetir(|| log.push("tic"), 3);
+    println!("{:?}", log);
+    let dono = String::from("posse");
+    println!("{}", executar_uma_vez(move || dono));
+}</pre>
+<pre class="term" data-cwd="~/projetos/traits">$ cargo run
+   Compiling traits v0.1.0 (/home/ana/projetos/traits)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/traits`
+21
+["tic", "tic", "tic"]
+posse</pre>
+
+<hr>
+<h2>5. Closures nas coleções</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+struct Aluno {
+    nome: &amp;'static str,
+    nota: u32,
+}
+
+fn main() {
+    let mut turma = vec![
+        Aluno { nome: "Caio", nota: 7 },
+        Aluno { nome: "Ana", nota: 9 },
+        Aluno { nome: "Bia", nota: 8 },
+    ];
+    turma.sort_by_key(|a| a.nota);
+    println!("{:?}", turma.iter().map(|a| a.nome).collect::&lt;Vec&lt;_&gt;&gt;());
+    turma.sort_by(|a, b| a.nome.cmp(b.nome));
+    println!("{:?}", turma.iter().map(|a| a.nome).collect::&lt;Vec&lt;_&gt;&gt;());
+    let minima = 8;
+    turma.retain(|a| a.nota &gt;= minima);
+    println!("{:?}", turma);
+}</pre>
+<pre class="term" data-cwd="~/projetos/colecoes">$ cargo run
+   Compiling colecoes v0.1.0 (/home/ana/projetos/colecoes)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/colecoes`
+["Caio", "Bia", "Ana"]
+["Ana", "Bia", "Caio"]
+[Aluno { nome: "Ana", nota: 9 }, Aluno { nome: "Bia", nota: 8 }]</pre>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete a closure que soma 1:</p><div class="ex-code">let mais_um = <input data-answer="|x|" aria-label="resposta"> x + 1;</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para a closure virar dona do que captura:</p><div class="ex-code">let f = <input data-answer="move" aria-label="resposta"> || println!("{nome}");</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Uma closure que muda uma variável capturada implementa qual trait?</p>
+<label><input type="radio" name="q1"> <code>Fn</code></label>
+<label><input type="radio" name="q1"> <code>FnOnce</code> apenas</label>
+<label><input type="radio" name="q1"> <code>FnMut</code></label>
+<label><input type="radio" name="q1"> <code>Copy</code></label></div>
+<div class="mc" data-answer="1"><p class="mc-q">Quando o <code>move</code> é obrigatório?</p>
+<label><input type="radio" name="q2"> Quando a closure precisa viver mais que as variáveis que captura (por exemplo, ao ser devolvida ou enviada para outra thread)</label>
+<label><input type="radio" name="q2"> Sempre</label>
+<label><input type="radio" name="q2"> Só com números</label>
+<label><input type="radio" name="q2"> Nunca, é só estilo</label></div>
+<div class="trycmd" data-goal="src:let\s+\w+\s*=\s*\|;;out:Com desconto: 85.00">
+<p class="try-task"><strong>Missão:</strong> Crie uma closure <code>aplicar_desconto</code> que captura <code>let desconto = 0.15;</code> e recebe um preço. Imprima <code>Com desconto: 85.00</code> para o preço <code>100.0</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let desconto = 0.15;
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let desconto = 0.15;
+    let aplicar_desconto = |preco: f64| preco * (1.0 - desconto);
+    println!("Com desconto: {:.2}", aplicar_desconto(100.0));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Com desconto: 85.00
+</pre>
+</div>
+<div class="trycmd" data-goal="src:let\s+mut\s+\w+\s*=\s*\|\|;;out:passos: 3;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo não compila: a closure muda <code>passos</code> mas não é <code>mut</code>. Conserte e rode para imprimir <code>passos: 3</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut passos = 0;
+    let andar = || passos += 1;
+    andar();
+    andar();
+    andar();
+    println!("passos: {passos}");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut passos = 0;
+    let mut andar = || passos += 1;
+    andar();
+    andar();
+    andar();
+    println!("passos: {passos}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+passos: 3
+</pre>
+</div>
+<div class="trycmd" data-goal="src:impl\s+Fn\(\s*i32\s*\)\s*-&gt;\s*i32;;src:\bmove\b;;out:triplo de 7: 21;;out:vezes 10 de 7: 70">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn multiplicador(fator: i32) -&gt; impl Fn(i32) -&gt; i32</code> que devolve <code>move |x| x * fator</code>. Crie <code>triplo</code> e <code>vezes10</code> e imprima <code>triplo de 7: 21</code> e <code>vezes 10 de 7: 70</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn multiplicador(fator: i32) -&gt; impl Fn(i32) -&gt; i32 {
+    move |x| x * fator
+}
+
+fn main() {
+    let triplo = multiplicador(3);
+    let vezes10 = multiplicador(10);
+    println!("triplo de 7: {}", triplo(7));
+    println!("vezes 10 de 7: {}", vezes10(7));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+triplo de 7: 21
+vezes 10 de 7: 70
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>|a, b| a + b</code> cria uma closure; tipos são opcionais.</li>
+<li>Closures capturam variáveis por <code>&amp;</code>, <code>&amp;mut</code> (precisa de <code>let mut</code>) ou, com <code>move</code>, por posse.</li>
+<li><code>Fn</code> lê, <code>FnMut</code> muda, <code>FnOnce</code> consome; use-os como restrição em funções genéricas.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
