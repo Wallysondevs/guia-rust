@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Box&amp;lt;T&amp;gt; em Rust — dados no heap, tipos recursivos e dyn Trait | Guia Rust</title>
+<meta name="description" content="O smart pointer Box em Rust: guardar um valor no heap, Deref e o operador *, tipos recursivos (lista ligada e árvore), o erro E0072 e coleções de Box&amp;lt;dyn Trait&amp;gt;.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Box&lt;T&gt;</span>: dados no heap</h1>
+
+<p class="intro">Um <strong>smart pointer</strong> (ponteiro inteligente) é uma struct que se comporta como referência, mas é <em>dona</em> do valor e faz algo a mais. O mais simples é o <code>Box&lt;T&gt;</code>: ele guarda o valor no <strong>heap</strong> e, na pilha, fica só um ponteiro. Quando o <code>Box</code> sai de escopo, o valor no heap é liberado.</p>
+<div class="note"><strong>Quando usar Box</strong><ul>
+<li>Tipos <strong>recursivos</strong>, cujo tamanho o compilador não consegue calcular (listas, árvores).</li>
+<li>Guardar valores de tipos diferentes que implementam o mesmo trait: <code>Box&lt;dyn Trait&gt;</code>.</li>
+<li>Mover um valor grande sem copiar os bytes (só o ponteiro anda).</li>
+</ul></div>
+
+<hr>
+<h2>1. O básico</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let numero = Box::new(41);
+    let soma = *numero + 1;
+    println!("numero = {numero}");
+    println!("soma = {soma}");
+    println!("tamanho do Box na pilha: {} bytes", std::mem::size_of::&lt;Box&lt;i32&gt;&gt;());
+}</pre>
+<pre class="term" data-cwd="~/projetos/box-basico">$ cargo run
+   Compiling box-basico v0.1.0 (/home/ana/projetos/box-basico)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/box-basico`
+numero = 41
+soma = 42
+tamanho do Box na pilha: 8 bytes</pre>
+<p><code>Box::new</code> coloca o valor no heap. Para usar o valor, <code>*numero</code> <strong>desreferencia</strong> (segue o ponteiro). O <code>println!</code> já faz isso sozinho. Na pilha, o <code>Box</code> ocupa 8 bytes: o tamanho de um endereço numa máquina de 64 bits.</p>
+
+<hr>
+<h2>2. Tipos recursivos</h2>
+<p>Uma lista ligada em que cada nó contém o próximo nó parece natural, mas não compila:</p>
+<pre class="file" data-file="src/main.rs">enum Lista {
+    No(i32, Lista),
+    Fim,
+}
+
+fn main() {
+    let _l = Lista::Fim;
+}</pre>
+<pre class="term" data-cwd="~/projetos/recursivo">$ cargo run
+   Compiling recursivo v0.1.0 (/home/ana/projetos/recursivo)
+error[E0072]: recursive type `Lista` has infinite size
+ --&gt; src/main.rs:1:1
+  |
+1 | enum Lista {
+  | ^^^^^^^^^^
+2 |     No(i32, Lista),
+  |             ----- recursive without indirection
+  |
+help: insert some indirection (e.g., a `Box`, `Rc`, or `&amp;`) to break the cycle
+  |
+2 |     No(i32, Box&lt;Lista&gt;),
+  |             ++++     +
+
+For more information about this error, try `rustc --explain E0072`.
+error: could not compile `recursivo` (bin "recursivo") due to 1 previous error</pre>
+<p>O compilador tenta calcular o tamanho de <code>Lista</code>: ela contém uma <code>Lista</code>, que contém outra <code>Lista</code>… infinito. A dica (<code>help</code>) é exatamente a solução: pôr o próximo nó dentro de um <code>Box</code>, que tem tamanho fixo.</p>
+<pre class="file" data-file="src/main.rs">enum Lista {
+    No(i32, Box&lt;Lista&gt;),
+    Fim,
+}
+
+use Lista::{Fim, No};
+
+fn soma(l: &amp;Lista) -&gt; i32 {
+    match l {
+        No(valor, resto) =&gt; valor + soma(resto),
+        Fim =&gt; 0,
+    }
+}
+
+fn main() {
+    let l = No(1, Box::new(No(2, Box::new(No(3, Box::new(Fim))))));
+    println!("soma = {}", soma(&amp;l));
+}</pre>
+<pre class="term" data-cwd="~/projetos/lista">$ cargo run
+   Compiling lista v0.1.0 (/home/ana/projetos/lista)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/lista`
+soma = 6</pre>
+
+<h3>Uma árvore binária</h3>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+enum Arvore {
+    Folha,
+    No(Box&lt;Arvore&gt;, i32, Box&lt;Arvore&gt;),
+}
+
+impl Arvore {
+    fn inserir(self, v: i32) -&gt; Arvore {
+        match self {
+            Arvore::Folha =&gt; Arvore::No(Box::new(Arvore::Folha), v, Box::new(Arvore::Folha)),
+            Arvore::No(esq, x, dir) =&gt; {
+                if v &lt; x {
+                    Arvore::No(Box::new(esq.inserir(v)), x, dir)
+                } else {
+                    Arvore::No(esq, x, Box::new(dir.inserir(v)))
+                }
+            }
+        }
+    }
+
+    fn em_ordem(&amp;self, saida: &amp;mut Vec&lt;i32&gt;) {
+        if let Arvore::No(esq, x, dir) = self {
+            esq.em_ordem(saida);
+            saida.push(*x);
+            dir.em_ordem(saida);
+        }
+    }
+}
+
+fn main() {
+    let mut a = Arvore::Folha;
+    for v in [5, 2, 8, 1, 9, 3] {
+        a = a.inserir(v);
+    }
+    let mut ordenado = Vec::new();
+    a.em_ordem(&amp;mut ordenado);
+    println!("{:?}", ordenado);
+}</pre>
+<pre class="term" data-cwd="~/projetos/arvore">$ cargo run
+   Compiling arvore v0.1.0 (/home/ana/projetos/arvore)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/arvore`
+[1, 2, 3, 5, 8, 9]</pre>
+<p>Repare em <code>esq.inserir(v)</code>: <code>esq</code> é um <code>Box&lt;Arvore&gt;</code>, mas o método é de <code>Arvore</code>. O <code>Box</code> implementa o trait <code>Deref</code>, então o Rust segue o ponteiro sozinho (<em>auto-deref</em>). Para tirar o valor de dentro, <code>*esq</code> move o conteúdo para fora do <code>Box</code>.</p>
+
+<hr>
+<h2>3. Box&lt;dyn Trait&gt;: tipos diferentes na mesma coleção</h2>
+<pre class="file" data-file="src/main.rs">trait Forma {
+    fn area(&amp;self) -&gt; f64;
+    fn nome(&amp;self) -&gt; String;
+}
+
+struct Quadrado(f64);
+struct Circulo(f64);
+
+impl Forma for Quadrado {
+    fn area(&amp;self) -&gt; f64 { self.0 * self.0 }
+    fn nome(&amp;self) -&gt; String { format!("quadrado de lado {}", self.0) }
+}
+
+impl Forma for Circulo {
+    fn area(&amp;self) -&gt; f64 { 3.14159 * self.0 * self.0 }
+    fn nome(&amp;self) -&gt; String { format!("círculo de raio {}", self.0) }
+}
+
+fn main() {
+    let formas: Vec&lt;Box&lt;dyn Forma&gt;&gt; = vec![
+        Box::new(Quadrado(2.0)),
+        Box::new(Circulo(1.0)),
+        Box::new(Quadrado(3.0)),
+    ];
+    let mut total = 0.0;
+    for f in &amp;formas {
+        println!("{:&lt;22} área {:.2}", f.nome(), f.area());
+        total += f.area();
+    }
+    println!("total: {total:.2}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/dyn-trait">$ cargo run
+   Compiling dyn-trait v0.1.0 (/home/ana/projetos/dyn-trait)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/dyn-trait`
+quadrado de lado 2     área 4.00
+círculo de raio 1      área 3.14
+quadrado de lado 3     área 9.00
+total: 16.14</pre>
+<p>Um <code>Vec</code> só guarda elementos de <strong>um</strong> tipo. <code>Box&lt;dyn Forma&gt;</code> é esse tipo único: “um ponteiro para qualquer coisa que implemente <code>Forma</code>”. A chamada <code>f.area()</code> é decidida em tempo de execução (<em>dynamic dispatch</em>), por uma tabela de métodos guardada junto com o ponteiro.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para guardar o número 10 no heap:</p><div class="ex-code">let n = <input data-answer="Box::new" aria-label="resposta">(10);</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para somar 1 ao valor de dentro do Box:</p><div class="ex-code">let x = <input data-answer="*" aria-label="resposta">n + 1;</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Por que <code>enum Lista { No(i32, Lista), Fim }</code> não compila?</p>
+<label><input type="radio" name="q1"> porque enums não podem conter números</label>
+<label><input type="radio" name="q1"> porque falta <code>#[derive(Debug)]</code></label>
+<label><input type="radio" name="q1"> porque o tipo teria tamanho infinito</label>
+<label><input type="radio" name="q1"> porque <code>Fim</code> não tem valor</label></div>
+<div class="mc" data-answer="1"><p class="mc-q">O que <code>Vec&lt;Box&lt;dyn Forma&gt;&gt;</code> permite?</p>
+<label><input type="radio" name="q2"> guardar valores de tipos diferentes que implementam <code>Forma</code></label>
+<label><input type="radio" name="q2"> guardar só valores do tipo <code>Forma</code></label>
+<label><input type="radio" name="q2"> guardar referências que nunca são liberadas</label>
+<label><input type="radio" name="q2"> deixar o código mais rápido que com generics</label></div>
+<div class="trycmd" data-goal="src:Box&lt;Lista&gt;;;out:tamanho = 4;;semerro">
+<p class="try-task"><strong>Missão:</strong> O <code>enum</code> abaixo não compila (E0072). Conserte usando <code>Box</code> e complete <code>main</code> para imprimir <code>tamanho = 4</code> para a lista 10 → 20 → 30 → 40.</p>
+<pre class="script" data-file="src/main.rs">
+enum Lista {
+    No(i32, Lista),
+    Fim,
+}
+
+fn tamanho(l: &amp;Lista) -&gt; usize {
+    match l {
+        Lista::No(_, resto) =&gt; 1 + tamanho(resto),
+        Lista::Fim =&gt; 0,
+    }
+}
+
+fn main() {
+    // monte a lista 10 -&gt; 20 -&gt; 30 -&gt; 40
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+enum Lista {
+    No(i32, Box&lt;Lista&gt;),
+    Fim,
+}
+
+use Lista::{Fim, No};
+
+fn tamanho(l: &amp;Lista) -&gt; usize {
+    match l {
+        No(_, resto) =&gt; 1 + tamanho(resto),
+        Fim =&gt; 0,
+    }
+}
+
+fn main() {
+    let l = No(10, Box::new(No(20, Box::new(No(30, Box::new(No(40, Box::new(Fim))))))));
+    if let No(primeiro, _) = &amp;l {
+        println!("primeiro = {primeiro}");
+    }
+    println!("tamanho = {}", tamanho(&amp;l));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+primeiro = 10
+tamanho = 4
+</pre>
+</div>
+<div class="trycmd" data-goal="src:impl\s+Animal\s+for\s+Vaca;;out:Rex diz au;;out:Mimosa diz muu;;semerro">
+<p class="try-task"><strong>Missão:</strong> Crie a struct <code>Vaca</code> e implemente <code>Animal</code> para ela (som <code>muu</code>), e coloque uma vaca chamada Mimosa no vetor. A saída deve ter <code>Rex diz au</code> e <code>Mimosa diz muu</code>.</p>
+<pre class="script" data-file="src/main.rs">
+trait Animal {
+    fn nome(&amp;self) -&gt; String;
+    fn som(&amp;self) -&gt; String;
+}
+
+struct Cachorro;
+
+impl Animal for Cachorro {
+    fn nome(&amp;self) -&gt; String { "Rex".to_string() }
+    fn som(&amp;self) -&gt; String { "au".to_string() }
+}
+
+fn main() {
+    let bichos: Vec&lt;Box&lt;dyn Animal&gt;&gt; = vec![Box::new(Cachorro)];
+    for b in &amp;bichos {
+        println!("{} diz {}", b.nome(), b.som());
+    }
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+trait Animal {
+    fn nome(&amp;self) -&gt; String;
+    fn som(&amp;self) -&gt; String;
+}
+
+struct Cachorro;
+struct Vaca;
+
+impl Animal for Cachorro {
+    fn nome(&amp;self) -&gt; String { "Rex".to_string() }
+    fn som(&amp;self) -&gt; String { "au".to_string() }
+}
+
+impl Animal for Vaca {
+    fn nome(&amp;self) -&gt; String { "Mimosa".to_string() }
+    fn som(&amp;self) -&gt; String { "muu".to_string() }
+}
+
+fn main() {
+    let bichos: Vec&lt;Box&lt;dyn Animal&gt;&gt; = vec![Box::new(Cachorro), Box::new(Vaca)];
+    for b in &amp;bichos {
+        println!("{} diz {}", b.nome(), b.som());
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+Rex diz au
+Mimosa diz muu
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Box::new(v)</code> guarda <code>v</code> no heap; o <code>Box</code> é dono do valor e o libera ao sair de escopo.</li>
+<li><code>*b</code> desreferencia; métodos funcionam direto graças ao <code>Deref</code>.</li>
+<li>Tipos recursivos precisam de <code>Box</code> para ter tamanho conhecido (erro E0072).</li>
+<li><code>Box&lt;dyn Trait&gt;</code> junta tipos diferentes que implementam o mesmo trait.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

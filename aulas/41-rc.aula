@@ -1,0 +1,189 @@
+---
+slug: rc
+menu: Rc&lt;T&gt;
+titulo: Rc&lt;T&gt; em Rust — vários donos com contagem de referências | Guia Rust
+desc: O smart pointer Rc em Rust: vários donos para o mesmo valor, Rc::clone, Rc::strong_count, quando o valor é liberado, Drop, por que Rc não pode ser modificado e por que não funciona entre threads.
+h1: <span class="hl">Rc&lt;T&gt;</span>: vários donos
+nivel: n3
+grupo: Smart Pointers
+---
+<p class="intro">A regra do ownership diz: cada valor tem <strong>um</strong> dono. Às vezes, porém, um valor precisa ser compartilhado de verdade: vários nós de um grafo apontando para o mesmo nó, várias partes do programa lendo a mesma configuração. O <code>Rc&lt;T&gt;</code> (<em>reference counted</em>) resolve isso: ele conta quantos donos existem e só libera o valor quando o último sai de escopo.</p>
+
+<hr>
+<h2>1. O problema</h2>
+::: exemplo sem-rc falha
+#[derive(Debug)]
+enum Lista {
+    No(i32, Box<Lista>),
+    Fim,
+}
+
+use Lista::{Fim, No};
+
+fn main() {
+    let comum = No(5, Box::new(No(10, Box::new(Fim))));
+    let a = No(3, Box::new(comum));
+    let b = No(4, Box::new(comum));
+    println!("{:?}\n{:?}", a, b);
+}
+:::
+<p>As listas <code>a</code> e <code>b</code> querem compartilhar o final <code>comum</code>. Com <code>Box</code>, o primeiro uso <strong>move</strong> <code>comum</code>, e o segundo dá E0382.</p>
+
+<hr>
+<h2>2. Compartilhando com Rc</h2>
+::: exemplo com-rc
+use std::rc::Rc;
+
+#[allow(dead_code)]
+#[derive(Debug)]
+enum Lista {
+    No(i32, Rc<Lista>),
+    Fim,
+}
+
+use Lista::{Fim, No};
+
+fn main() {
+    let comum = Rc::new(No(5, Rc::new(No(10, Rc::new(Fim)))));
+    println!("donos de comum: {}", Rc::strong_count(&comum));
+    let a = No(3, Rc::clone(&comum));
+    println!("depois de a: {}", Rc::strong_count(&comum));
+    {
+        let b = No(4, Rc::clone(&comum));
+        println!("depois de b: {}", Rc::strong_count(&comum));
+        println!("b = {:?}", b);
+    }
+    println!("b saiu de escopo: {}", Rc::strong_count(&comum));
+    println!("a = {:?}", a);
+}
+:::
+<p>O <code>#[allow(dead_code)]</code> só cala um aviso: os campos são lidos apenas pelo <code>{:?}</code>, e o compilador não conta o <code>Debug</code> derivado como “uso”.</p>
+<dl class="anatomy"><dt>Rc::new(v)</dt><dd>cria o valor no heap com contador 1.</dd><dt>Rc::clone(&amp;r)</dt><dd><strong>não</strong> copia o valor: cria outro ponteiro e soma 1 no contador. É barato.</dd><dt>Rc::strong_count(&amp;r)</dt><dd>mostra quantos donos existem.</dd><dt>fim de escopo</dt><dd>cada <code>Rc</code> que sai de escopo subtrai 1; ao chegar em 0, o valor é liberado.</dd></dl>
+<div class="note"><strong>Por que <code>Rc::clone(&amp;x)</code> e não <code>x.clone()</code>?</strong> Os dois fazem o mesmo. A convenção <code>Rc::clone</code> deixa claro para quem lê que é só um contador subindo, não uma cópia cara.</div>
+
+<hr>
+<h2>3. Vendo a liberação com Drop</h2>
+::: exemplo drop
+use std::rc::Rc;
+
+struct Recurso(&'static str);
+
+impl Drop for Recurso {
+    fn drop(&mut self) {
+        println!("liberando {}", self.0);
+    }
+}
+
+fn main() {
+    let r1 = Rc::new(Recurso("config"));
+    let r2 = Rc::clone(&r1);
+    println!("donos: {}", Rc::strong_count(&r1));
+    drop(r1);
+    println!("r1 foi embora, donos: {}", Rc::strong_count(&r2));
+    drop(r2);
+    println!("fim do main");
+}
+:::
+<p>O trait <code>Drop</code> roda código quando um valor é destruído. O recurso só foi liberado quando o <strong>último</strong> dono (<code>r2</code>) foi embora.</p>
+
+<hr>
+<h2>4. Os limites do Rc</h2>
+<h3>Rc é só leitura</h3>
+::: exemplo rc-mut falha
+use std::rc::Rc;
+
+fn main() {
+    let placar = Rc::new(vec![1, 2]);
+    let outro = Rc::clone(&placar);
+    outro.push(3);
+    println!("{:?}", placar);
+}
+:::
+<p>Se dois donos pudessem modificar o valor livremente, voltaríamos aos problemas que o borrow checker evita. Para modificar um valor compartilhado, combine com <code>RefCell</code> (próxima aula).</p>
+<h3>Rc não atravessa threads</h3>
+<p>O contador do <code>Rc</code> não é atômico, então o compilador proíbe mandá-lo para outra thread (o tipo não implementa <code>Send</code>). Entre threads, use <code>Arc</code>, que você verá na aula de Arc e Mutex.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para criar mais um dono para <code>dados</code>:
+let outro = [[Rc::clone]](&dados);
+:::
+::: ex
+Complete para ver quantos donos existem:
+println!("{}", Rc::[[strong_count]](&dados));
+:::
+::: mc 2
+O que <code>Rc::clone(&amp;x)</code> faz?
+- copia todo o valor para um novo lugar do heap
+- cria outro ponteiro para o mesmo valor e soma 1 no contador
+- move <code>x</code> para a nova variável
+- cria uma referência fraca
+:::
+::: mc 3
+Quando o valor dentro de um <code>Rc</code> é liberado?
+- quando o primeiro dono sai de escopo
+- quando o programa termina
+- quando o contador de donos chega a zero
+- nunca; é preciso chamar <code>free</code>
+:::
+::: missao goal="src:Rc::clone\(&livro\);;out:leitores: 3;;semerro"
+Crie dois leitores para o mesmo livro com <code>Rc::clone(&amp;livro)</code> (sem copiar a String) e imprima <code>leitores: 3</code> usando <code>Rc::strong_count</code>.
+--- script
+use std::rc::Rc;
+
+fn main() {
+    let livro = Rc::new(String::from("Dom Casmurro"));
+    // crie leitor1 e leitor2 aqui
+
+    println!("leitores: {}", 1);
+}
+--- solucao
+use std::rc::Rc;
+
+fn main() {
+    let livro = Rc::new(String::from("Dom Casmurro"));
+    let leitor1 = Rc::clone(&livro);
+    let leitor2 = Rc::clone(&livro);
+    println!("{leitor1} / {leitor2}");
+    println!("leitores: {}", Rc::strong_count(&livro));
+}
+:::
+::: missao goal="src:impl\s+Drop\s+for\s+Arquivo;;out:fechando dados.txt;;semerro"
+Implemente <code>Drop</code> para <code>Arquivo</code>, imprimindo <code>fechando</code> seguido do nome, para que a saída mostre <code>fechando dados.txt</code> no fim.
+--- script
+use std::rc::Rc;
+
+struct Arquivo(String);
+
+fn main() {
+    let a = Rc::new(Arquivo(String::from("dados.txt")));
+    let b = Rc::clone(&a);
+    println!("abertos por {} donos", Rc::strong_count(&b));
+}
+--- solucao
+use std::rc::Rc;
+
+struct Arquivo(String);
+
+impl Drop for Arquivo {
+    fn drop(&mut self) {
+        println!("fechando {}", self.0);
+    }
+}
+
+fn main() {
+    let a = Rc::new(Arquivo(String::from("dados.txt")));
+    let b = Rc::clone(&a);
+    println!("abertos por {} donos", Rc::strong_count(&b));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Rc&lt;T&gt;</code> permite vários donos de um mesmo valor, contando as referências.</li>
+<li><code>Rc::clone</code> é barato: só soma 1 no contador.</li>
+<li>O valor é liberado quando o contador chega a zero (veja com <code>Drop</code>).</li>
+<li><code>Rc</code> só dá acesso de leitura e não pode ir para outra thread.</li>
+</ul>

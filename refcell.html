@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RefCell&amp;lt;T&amp;gt; em Rust — mutabilidade interior, borrow e borrow_mut | Guia Rust</title>
+<meta name="description" content="RefCell em Rust: mutabilidade interior, borrow e borrow_mut, as regras de empréstimo checadas em tempo de execução (panic already borrowed), Cell, e o padrão Rc&amp;lt;RefCell&amp;lt;T&amp;gt;&amp;gt; para dados compartilhados e modificáveis.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">RefCell&lt;T&gt;</span>: mutabilidade interior</h1>
+
+<p class="intro">As regras de empréstimo (uma <code>&amp;mut</code> <strong>ou</strong> várias <code>&amp;</code>) normalmente são checadas pelo compilador. O <code>RefCell&lt;T&gt;</code> move essa checagem para o <strong>tempo de execução</strong>: ele deixa modificar o valor mesmo através de uma referência imutável (<em>mutabilidade interior</em>) e, se as regras forem quebradas, o programa entra em pânico.</p>
+
+<hr>
+<h2>1. borrow e borrow_mut</h2>
+<pre class="file" data-file="src/main.rs">use std::cell::RefCell;
+
+fn main() {
+    let lista = RefCell::new(vec![1, 2, 3]);
+
+    lista.borrow_mut().push(4);
+
+    let tamanho = lista.borrow().len();
+    println!("tamanho: {tamanho}");
+    println!("lista: {:?}", lista.borrow());
+}</pre>
+<pre class="term" data-cwd="~/projetos/basico">$ cargo run
+   Compiling basico v0.1.0 (/home/ana/projetos/basico)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/basico`
+tamanho: 4
+lista: [1, 2, 3, 4]</pre>
+<p>Repare: <code>lista</code> <strong>não</strong> é <code>mut</code>, mas recebeu um <code>push</code>. <code>borrow()</code> devolve um empréstimo de leitura (<code>Ref</code>) e <code>borrow_mut()</code> um de escrita (<code>RefMut</code>); os dois são devolvidos sozinhos no fim da expressão ou do escopo.</p>
+
+<hr>
+<h2>2. Quebrando a regra: pânico em tempo de execução</h2>
+<pre class="file" data-file="src/main.rs">use std::cell::RefCell;
+
+fn main() {
+    let saldo = RefCell::new(100);
+    let leitura = saldo.borrow();
+    let mut escrita = saldo.borrow_mut();
+    *escrita += 50;
+    println!("{}", leitura);
+}</pre>
+<pre class="term" data-cwd="~/projetos/panico">$ cargo run
+   Compiling panico v0.1.0 (/home/ana/projetos/panico)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/panico`
+
+thread 'main' (303503) panicked at src/main.rs:6:29:
+RefCell already borrowed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+<p>O código <strong>compila</strong>, mas o <code>RefCell</code> percebe que já existe um empréstimo de leitura ativo e entra em pânico com <code>RefCell already borrowed</code>. A correção é encerrar a leitura antes (por exemplo, num bloco <code>{ }</code>) ou usar <code>try_borrow_mut</code>, que devolve um <code>Result</code> em vez de dar pânico.</p>
+<pre class="file" data-file="src/main.rs">use std::cell::RefCell;
+
+fn main() {
+    let saldo = RefCell::new(100);
+    let leitura = saldo.borrow();
+    match saldo.try_borrow_mut() {
+        Ok(mut s) =&gt; *s += 50,
+        Err(e) =&gt; println!("não deu para escrever: {e}"),
+    }
+    println!("saldo lido: {}", leitura);
+}</pre>
+<pre class="term" data-cwd="~/projetos/try-borrow">$ cargo run
+   Compiling try-borrow v0.1.0 (/home/ana/projetos/try-borrow)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/try-borrow`
+não deu para escrever: RefCell already borrowed
+saldo lido: 100</pre>
+
+<hr>
+<h2>3. Rc&lt;RefCell&lt;T&gt;&gt;: compartilhado e modificável</h2>
+<p>O par mais famoso: <code>Rc</code> dá vários donos, <code>RefCell</code> dá a modificação.</p>
+<pre class="file" data-file="src/main.rs">use std::cell::RefCell;
+use std::rc::Rc;
+
+#[derive(Debug)]
+struct Conta {
+    saldo: i64,
+}
+
+struct Pessoa {
+    nome: String,
+    conta: Rc&lt;RefCell&lt;Conta&gt;&gt;,
+}
+
+impl Pessoa {
+    fn gastar(&amp;self, valor: i64) {
+        self.conta.borrow_mut().saldo -= valor;
+        println!("{} gastou {}", self.nome, valor);
+    }
+}
+
+fn main() {
+    let conta = Rc::new(RefCell::new(Conta { saldo: 1000 }));
+    let ana = Pessoa { nome: "Ana".into(), conta: Rc::clone(&amp;conta) };
+    let beto = Pessoa { nome: "Beto".into(), conta: Rc::clone(&amp;conta) };
+
+    ana.gastar(300);
+    beto.gastar(150);
+    println!("{:?}", conta.borrow());
+}</pre>
+<pre class="term" data-cwd="~/projetos/conta-conjunta">$ cargo run
+   Compiling conta-conjunta v0.1.0 (/home/ana/projetos/conta-conjunta)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/conta-conjunta`
+Ana gastou 300
+Beto gastou 150
+Conta { saldo: 550 }</pre>
+<p>O método <code>gastar</code> recebe <code>&amp;self</code> (imutável), mas consegue mudar o saldo graças ao <code>RefCell</code>. As duas pessoas veem a mesma conta graças ao <code>Rc</code>.</p>
+
+<hr>
+<h2>4. Cell: para valores Copy</h2>
+<pre class="file" data-file="src/main.rs">use std::cell::Cell;
+
+struct Contador {
+    chamadas: Cell&lt;u32&gt;,
+}
+
+impl Contador {
+    fn registrar(&amp;self) {
+        self.chamadas.set(self.chamadas.get() + 1);
+    }
+}
+
+fn main() {
+    let c = Contador { chamadas: Cell::new(0) };
+    c.registrar();
+    c.registrar();
+    c.registrar();
+    println!("chamadas: {}", c.chamadas.get());
+}</pre>
+<pre class="term" data-cwd="~/projetos/cell">$ cargo run
+   Compiling cell v0.1.0 (/home/ana/projetos/cell)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/cell`
+chamadas: 3</pre>
+<p><code>Cell</code> não empresta: ele copia o valor para fora (<code>get</code>) e substitui (<code>set</code>). Por isso nunca entra em pânico, mas só serve bem para tipos <code>Copy</code> como números e <code>bool</code>.</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Tipo</th><th>Donos</th><th>Modificar</th><th>Checagem</th></tr>
+<tr><td><code>Box&lt;T&gt;</code></td><td>um</td><td>se o dono for <code>mut</code></td><td>compilação</td></tr>
+<tr><td><code>Rc&lt;T&gt;</code></td><td>vários</td><td>não</td><td>compilação</td></tr>
+<tr><td><code>RefCell&lt;T&gt;</code></td><td>um</td><td>sim, via <code>&amp;self</code></td><td>execução (pânico)</td></tr>
+<tr><td><code>Cell&lt;T&gt;</code></td><td>um</td><td>sim, copiando</td><td>nenhuma necessária</td></tr>
+<tr><td><code>Rc&lt;RefCell&lt;T&gt;&gt;</code></td><td>vários</td><td>sim</td><td>execução</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para pegar um empréstimo de escrita:</p><div class="ex-code">lista.<input data-answer="borrow_mut" aria-label="resposta">().push(5);</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o tipo de um vetor compartilhado e modificável:</p><div class="ex-code">let v: Rc&lt;<input data-answer="RefCell" aria-label="resposta">&lt;Vec&lt;i32&gt;&gt;&gt; = Rc::new(RefCell::new(vec![]));</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Quando o <code>RefCell</code> verifica as regras de empréstimo?</p>
+<label><input type="radio" name="q1"> na compilação</label>
+<label><input type="radio" name="q1"> na execução, entrando em pânico se forem quebradas</label>
+<label><input type="radio" name="q1"> nunca</label>
+<label><input type="radio" name="q1"> só no modo release</label></div>
+<div class="mc" data-answer="4"><p class="mc-q">Qual combinação dá vários donos <strong>e</strong> permite modificar?</p>
+<label><input type="radio" name="q2"> <code>Box&lt;T&gt;</code></label>
+<label><input type="radio" name="q2"> <code>Rc&lt;T&gt;</code></label>
+<label><input type="radio" name="q2"> <code>Cell&lt;T&gt;</code></label>
+<label><input type="radio" name="q2"> <code>Rc&lt;RefCell&lt;T&gt;&gt;</code></label></div>
+<div class="trycmd" data-goal="src:RefCell&lt;Vec&lt;String&gt;&gt;;;out:[&quot;compilou&quot;, &quot;testou&quot;];;semerro">
+<p class="try-task"><strong>Missão:</strong> O <code>Registro</code> precisa anotar mensagens num método que recebe <code>&amp;self</code>. Troque o campo para <code>RefCell&lt;Vec&lt;String&gt;&gt;</code> e ajuste o código para imprimir <code>["compilou", "testou"]</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Registro {
+    linhas: Vec&lt;String&gt;,
+}
+
+impl Registro {
+    fn anotar(&amp;self, msg: &amp;str) {
+        self.linhas.push(msg.to_string());
+    }
+}
+
+fn main() {
+    let r = Registro { linhas: Vec::new() };
+    r.anotar("compilou");
+    r.anotar("testou");
+    println!("{:?}", r.linhas);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::cell::RefCell;
+
+struct Registro {
+    linhas: RefCell&lt;Vec&lt;String&gt;&gt;,
+}
+
+impl Registro {
+    fn anotar(&amp;self, msg: &amp;str) {
+        self.linhas.borrow_mut().push(msg.to_string());
+    }
+}
+
+fn main() {
+    let r = Registro { linhas: RefCell::new(Vec::new()) };
+    r.anotar("compilou");
+    r.anotar("testou");
+    println!("{:?}", r.linhas.borrow());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+["compilou", "testou"]
+</pre>
+</div>
+<div class="trycmd" data-goal="src:Rc::clone\(&amp;placar\);;out:placar final: 30;;semerro">
+<p class="try-task"><strong>Missão:</strong> Dois jogadores compartilham um placar <code>Rc&lt;RefCell&lt;i32&gt;&gt;</code>. Crie <code>jogador2</code> com <code>Rc::clone(&amp;placar)</code>, faça cada jogador somar 10 e 20, e imprima <code>placar final: 30</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn main() {
+    let placar = Rc::new(RefCell::new(0));
+    let jogador1 = Rc::clone(&amp;placar);
+    *jogador1.borrow_mut() += 10;
+    println!("placar final: {}", placar.borrow());
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::cell::RefCell;
+use std::rc::Rc;
+
+fn main() {
+    let placar = Rc::new(RefCell::new(0));
+    let jogador1 = Rc::clone(&amp;placar);
+    let jogador2 = Rc::clone(&amp;placar);
+    *jogador1.borrow_mut() += 10;
+    *jogador2.borrow_mut() += 20;
+    println!("placar final: {}", placar.borrow());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+placar final: 30
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>RefCell</code> permite modificar através de <code>&amp;self</code>: mutabilidade interior.</li>
+<li><code>borrow()</code> lê, <code>borrow_mut()</code> escreve; quebrar a regra dá pânico em execução.</li>
+<li><code>try_borrow_mut()</code> devolve <code>Result</code> em vez de pânico.</li>
+<li><code>Rc&lt;RefCell&lt;T&gt;&gt;</code> = vários donos que podem modificar; <code>Cell</code> serve para tipos <code>Copy</code>.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

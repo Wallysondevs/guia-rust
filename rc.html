@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rc&amp;lt;T&amp;gt; em Rust — vários donos com contagem de referências | Guia Rust</title>
+<meta name="description" content="O smart pointer Rc em Rust: vários donos para o mesmo valor, Rc::clone, Rc::strong_count, quando o valor é liberado, Drop, por que Rc não pode ser modificado e por que não funciona entre threads.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Rc&lt;T&gt;</span>: vários donos</h1>
+
+<p class="intro">A regra do ownership diz: cada valor tem <strong>um</strong> dono. Às vezes, porém, um valor precisa ser compartilhado de verdade: vários nós de um grafo apontando para o mesmo nó, várias partes do programa lendo a mesma configuração. O <code>Rc&lt;T&gt;</code> (<em>reference counted</em>) resolve isso: ele conta quantos donos existem e só libera o valor quando o último sai de escopo.</p>
+
+<hr>
+<h2>1. O problema</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+enum Lista {
+    No(i32, Box&lt;Lista&gt;),
+    Fim,
+}
+
+use Lista::{Fim, No};
+
+fn main() {
+    let comum = No(5, Box::new(No(10, Box::new(Fim))));
+    let a = No(3, Box::new(comum));
+    let b = No(4, Box::new(comum));
+    println!("{:?}\n{:?}", a, b);
+}</pre>
+<pre class="term" data-cwd="~/projetos/sem-rc">$ cargo run
+   Compiling sem-rc v0.1.0 (/home/ana/projetos/sem-rc)
+error[E0382]: use of moved value: `comum`
+  --&gt; src/main.rs:12:28
+   |
+10 |     let comum = No(5, Box::new(No(10, Box::new(Fim))));
+   |         ----- move occurs because `comum` has type `Lista`, which does not implement the `Copy` trait
+11 |     let a = No(3, Box::new(comum));
+   |                            ----- value moved here
+12 |     let b = No(4, Box::new(comum));
+   |                            ^^^^^ value used here after move
+   |
+note: if `Lista` implemented `Clone`, you could clone the value
+  --&gt; src/main.rs:2:1
+   |
+ 2 | enum Lista {
+   | ^^^^^^^^^^ consider implementing `Clone` for this type
+...
+11 |     let a = No(3, Box::new(comum));
+   |                            ----- you could clone this value
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `sem-rc` (bin "sem-rc") due to 1 previous error</pre>
+<p>As listas <code>a</code> e <code>b</code> querem compartilhar o final <code>comum</code>. Com <code>Box</code>, o primeiro uso <strong>move</strong> <code>comum</code>, e o segundo dá E0382.</p>
+
+<hr>
+<h2>2. Compartilhando com Rc</h2>
+<pre class="file" data-file="src/main.rs">use std::rc::Rc;
+
+#[allow(dead_code)]
+#[derive(Debug)]
+enum Lista {
+    No(i32, Rc&lt;Lista&gt;),
+    Fim,
+}
+
+use Lista::{Fim, No};
+
+fn main() {
+    let comum = Rc::new(No(5, Rc::new(No(10, Rc::new(Fim)))));
+    println!("donos de comum: {}", Rc::strong_count(&amp;comum));
+    let a = No(3, Rc::clone(&amp;comum));
+    println!("depois de a: {}", Rc::strong_count(&amp;comum));
+    {
+        let b = No(4, Rc::clone(&amp;comum));
+        println!("depois de b: {}", Rc::strong_count(&amp;comum));
+        println!("b = {:?}", b);
+    }
+    println!("b saiu de escopo: {}", Rc::strong_count(&amp;comum));
+    println!("a = {:?}", a);
+}</pre>
+<pre class="term" data-cwd="~/projetos/com-rc">$ cargo run
+   Compiling com-rc v0.1.0 (/home/ana/projetos/com-rc)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/com-rc`
+donos de comum: 1
+depois de a: 2
+depois de b: 3
+b = No(4, No(5, No(10, Fim)))
+b saiu de escopo: 2
+a = No(3, No(5, No(10, Fim)))</pre>
+<p>O <code>#[allow(dead_code)]</code> só cala um aviso: os campos são lidos apenas pelo <code>{:?}</code>, e o compilador não conta o <code>Debug</code> derivado como “uso”.</p>
+<dl class="anatomy"><dt>Rc::new(v)</dt><dd>cria o valor no heap com contador 1.</dd><dt>Rc::clone(&amp;r)</dt><dd><strong>não</strong> copia o valor: cria outro ponteiro e soma 1 no contador. É barato.</dd><dt>Rc::strong_count(&amp;r)</dt><dd>mostra quantos donos existem.</dd><dt>fim de escopo</dt><dd>cada <code>Rc</code> que sai de escopo subtrai 1; ao chegar em 0, o valor é liberado.</dd></dl>
+<div class="note"><strong>Por que <code>Rc::clone(&amp;x)</code> e não <code>x.clone()</code>?</strong> Os dois fazem o mesmo. A convenção <code>Rc::clone</code> deixa claro para quem lê que é só um contador subindo, não uma cópia cara.</div>
+
+<hr>
+<h2>3. Vendo a liberação com Drop</h2>
+<pre class="file" data-file="src/main.rs">use std::rc::Rc;
+
+struct Recurso(&amp;'static str);
+
+impl Drop for Recurso {
+    fn drop(&amp;mut self) {
+        println!("liberando {}", self.0);
+    }
+}
+
+fn main() {
+    let r1 = Rc::new(Recurso("config"));
+    let r2 = Rc::clone(&amp;r1);
+    println!("donos: {}", Rc::strong_count(&amp;r1));
+    drop(r1);
+    println!("r1 foi embora, donos: {}", Rc::strong_count(&amp;r2));
+    drop(r2);
+    println!("fim do main");
+}</pre>
+<pre class="term" data-cwd="~/projetos/drop">$ cargo run
+   Compiling drop v0.1.0 (/home/ana/projetos/drop)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/drop`
+donos: 2
+r1 foi embora, donos: 1
+liberando config
+fim do main</pre>
+<p>O trait <code>Drop</code> roda código quando um valor é destruído. O recurso só foi liberado quando o <strong>último</strong> dono (<code>r2</code>) foi embora.</p>
+
+<hr>
+<h2>4. Os limites do Rc</h2>
+<h3>Rc é só leitura</h3>
+<pre class="file" data-file="src/main.rs">use std::rc::Rc;
+
+fn main() {
+    let placar = Rc::new(vec![1, 2]);
+    let outro = Rc::clone(&amp;placar);
+    outro.push(3);
+    println!("{:?}", placar);
+}</pre>
+<pre class="term" data-cwd="~/projetos/rc-mut">$ cargo run
+   Compiling rc-mut v0.1.0 (/home/ana/projetos/rc-mut)
+error[E0596]: cannot borrow data in an `Rc` as mutable
+ --&gt; src/main.rs:6:5
+  |
+6 |     outro.push(3);
+  |     ^^^^^ cannot borrow as mutable
+  |
+  = help: trait `DerefMut` is required to modify through a dereference, but it is not implemented for `Rc&lt;Vec&lt;i32&gt;&gt;`
+
+For more information about this error, try `rustc --explain E0596`.
+error: could not compile `rc-mut` (bin "rc-mut") due to 1 previous error</pre>
+<p>Se dois donos pudessem modificar o valor livremente, voltaríamos aos problemas que o borrow checker evita. Para modificar um valor compartilhado, combine com <code>RefCell</code> (próxima aula).</p>
+<h3>Rc não atravessa threads</h3>
+<p>O contador do <code>Rc</code> não é atômico, então o compilador proíbe mandá-lo para outra thread (o tipo não implementa <code>Send</code>). Entre threads, use <code>Arc</code>, que você verá na aula de Arc e Mutex.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para criar mais um dono para <code>dados</code>:</p><div class="ex-code">let outro = <input data-answer="Rc::clone" aria-label="resposta">(&amp;dados);</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para ver quantos donos existem:</p><div class="ex-code">println!("{}", Rc::<input data-answer="strong_count" aria-label="resposta">(&amp;dados));</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">O que <code>Rc::clone(&amp;x)</code> faz?</p>
+<label><input type="radio" name="q1"> copia todo o valor para um novo lugar do heap</label>
+<label><input type="radio" name="q1"> cria outro ponteiro para o mesmo valor e soma 1 no contador</label>
+<label><input type="radio" name="q1"> move <code>x</code> para a nova variável</label>
+<label><input type="radio" name="q1"> cria uma referência fraca</label></div>
+<div class="mc" data-answer="3"><p class="mc-q">Quando o valor dentro de um <code>Rc</code> é liberado?</p>
+<label><input type="radio" name="q2"> quando o primeiro dono sai de escopo</label>
+<label><input type="radio" name="q2"> quando o programa termina</label>
+<label><input type="radio" name="q2"> quando o contador de donos chega a zero</label>
+<label><input type="radio" name="q2"> nunca; é preciso chamar <code>free</code></label></div>
+<div class="trycmd" data-goal="src:Rc::clone\(&amp;livro\);;out:leitores: 3;;semerro">
+<p class="try-task"><strong>Missão:</strong> Crie dois leitores para o mesmo livro com <code>Rc::clone(&amp;livro)</code> (sem copiar a String) e imprima <code>leitores: 3</code> usando <code>Rc::strong_count</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::rc::Rc;
+
+fn main() {
+    let livro = Rc::new(String::from("Dom Casmurro"));
+    // crie leitor1 e leitor2 aqui
+
+    println!("leitores: {}", 1);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::rc::Rc;
+
+fn main() {
+    let livro = Rc::new(String::from("Dom Casmurro"));
+    let leitor1 = Rc::clone(&amp;livro);
+    let leitor2 = Rc::clone(&amp;livro);
+    println!("{leitor1} / {leitor2}");
+    println!("leitores: {}", Rc::strong_count(&amp;livro));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+Dom Casmurro / Dom Casmurro
+leitores: 3
+</pre>
+</div>
+<div class="trycmd" data-goal="src:impl\s+Drop\s+for\s+Arquivo;;out:fechando dados.txt;;semerro">
+<p class="try-task"><strong>Missão:</strong> Implemente <code>Drop</code> para <code>Arquivo</code>, imprimindo <code>fechando</code> seguido do nome, para que a saída mostre <code>fechando dados.txt</code> no fim.</p>
+<pre class="script" data-file="src/main.rs">
+use std::rc::Rc;
+
+struct Arquivo(String);
+
+fn main() {
+    let a = Rc::new(Arquivo(String::from("dados.txt")));
+    let b = Rc::clone(&amp;a);
+    println!("abertos por {} donos", Rc::strong_count(&amp;b));
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::rc::Rc;
+
+struct Arquivo(String);
+
+impl Drop for Arquivo {
+    fn drop(&amp;mut self) {
+        println!("fechando {}", self.0);
+    }
+}
+
+fn main() {
+    let a = Rc::new(Arquivo(String::from("dados.txt")));
+    let b = Rc::clone(&amp;a);
+    println!("abertos por {} donos", Rc::strong_count(&amp;b));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+abertos por 2 donos
+fechando dados.txt
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Rc&lt;T&gt;</code> permite vários donos de um mesmo valor, contando as referências.</li>
+<li><code>Rc::clone</code> é barato: só soma 1 no contador.</li>
+<li>O valor é liberado quando o contador chega a zero (veja com <code>Drop</code>).</li>
+<li><code>Rc</code> só dá acesso de leitura e não pode ir para outra thread.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -59,6 +59,13 @@ var NIVEIS = [
       ["testes.html", "Testes com cargo test"],
       ["erros-compilador.html", "Erros comuns do compilador"]
     ]}
+  ]},
+  { id: "n3", nome: "Nível 3 · Avançado", curto: "Avançado", desc: "Smart pointers, concorrência, macros, unsafe e projeto final", grupos: [
+    { grupo: "Smart Pointers", itens: [
+      ["box.html", "Box&lt;T&gt;"],
+      ["rc.html", "Rc&lt;T&gt;"],
+      ["refcell.html", "RefCell&lt;T&gt;"]
+    ]}
   ]}
 ];
 /* niveis:fim */
