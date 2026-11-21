@@ -1,0 +1,206 @@
+---
+slug: vec
+menu: Vetores (Vec)
+titulo: Vec em Rust — criar, push, pop, get, iterar, ordenar e remover | Guia Rust
+desc: Vetores em Rust com Vec<T>: vec!, push, pop, acesso por índice e com get, percorrer com for e &mut, sort, dedup, retain, contains, insert, remove e o panic de índice fora do vetor.
+h1: Vetores (<span class="hl">Vec</span>)
+nivel: n2
+grupo: Coleções
+---
+<p class="intro">O <code>Vec&lt;T&gt;</code> (vetor) é a lista que cresce: guarda vários valores do mesmo tipo, um depois do outro, e aumenta conforme você acrescenta itens. É a coleção mais usada em Rust.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar vetores com <code>Vec::new()</code> e <code>vec![]</code>, acrescentar e tirar itens.</li>
+<li>A diferença entre <code>v[i]</code> (panic se não existir) e <code>v.get(i)</code> (devolve <code>Option</code>).</li>
+<li>A percorrer, alterar, ordenar e filtrar o vetor.</li>
+</ul></div>
+
+<hr>
+<h2>1. Criando e acrescentando</h2>
+::: exemplo criar
+fn main() {
+    let mut compras: Vec<String> = Vec::new();
+    compras.push(String::from("arroz"));
+    compras.push(String::from("feijão"));
+    let numeros = vec![10, 20, 30];
+    println!("{:?} ({} itens)", compras, compras.len());
+    println!("{:?} vazio? {}", numeros, numeros.is_empty());
+    let mut pilha = vec![1, 2, 3];
+    let topo = pilha.pop();
+    println!("tirei {:?}, sobrou {:?}", topo, pilha);
+}
+:::
+<p>O <code>vec![…]</code> é uma macro que cria o vetor já com valores. Com <code>Vec::new()</code>, o vetor nasce vazio e o tipo vem da anotação (<code>Vec&lt;String&gt;</code>) ou do primeiro <code>push</code>.</p>
+
+<hr>
+<h2>2. Lendo: índice ou <code>get</code></h2>
+::: exemplo ler
+fn main() {
+    let notas = vec![7, 9, 10];
+    let segunda = notas[1];
+    println!("segunda: {segunda}");
+    match notas.get(5) {
+        Some(n) => println!("sexta: {n}"),
+        None => println!("não existe a posição 5"),
+    }
+    println!("primeira: {:?}, última: {:?}", notas.first(), notas.last());
+}
+:::
+::: exemplo ler-panic falha
+fn main() {
+    let notas = vec![7, 9, 10];
+    let i = 10;
+    println!("{}", notas[i]);
+}
+:::
+<p>Use <code>v[i]</code> quando o índice com certeza existe (e um erro seria um bug). Use <code>v.get(i)</code> quando pode não existir, por exemplo um número digitado pelo usuário.</p>
+
+<hr>
+<h2>3. Percorrendo e alterando</h2>
+::: exemplo percorrer
+fn main() {
+    let mut precos = vec![10.0, 25.5, 8.0];
+    for p in &precos {
+        print!("{p} ");
+    }
+    println!();
+    for p in &mut precos {
+        *p *= 1.1;
+    }
+    println!("{:.2?}", precos);
+    let total: f64 = precos.iter().sum();
+    println!("total: {total:.2}");
+}
+:::
+<p><code>for p in &amp;v</code> empresta cada item para leitura. <code>for p in &amp;mut v</code> empresta para escrita: o <code>*p</code> (<em>desreferência</em>) acessa o valor apontado pela referência para poder mudá-lo. Sem o <code>&amp;</code>, o <code>for</code> consome o vetor, que não pode ser usado depois.</p>
+
+<hr>
+<h2>4. Quando dá errado: mudar o vetor dentro do <code>for</code></h2>
+::: exemplo for-push falha
+fn main() {
+    let mut v = vec![1, 2, 3];
+    for x in &v {
+        if *x == 2 {
+            v.push(4);
+        }
+    }
+    println!("{:?}", v);
+}
+:::
+<p>O <code>for</code> empresta <code>v</code> para leitura durante o laço inteiro; o <code>push</code> precisaria de <code>&amp;mut v</code> ao mesmo tempo. É a regra do borrowing, e ela evita um bug clássico: acrescentar itens numa lista enquanto se anda por ela.</p>
+
+<hr>
+<h2>5. Ordenar, procurar, remover</h2>
+::: exemplo metodos
+fn main() {
+    let mut v = vec![5, 3, 8, 3, 1, 8, 2];
+    v.sort();
+    println!("ordenado: {:?}", v);
+    v.dedup();
+    println!("sem repetidos seguidos: {:?}", v);
+    v.retain(|&x| x != 5);
+    println!("sem o 5: {:?}", v);
+    v.insert(0, 100);
+    let removido = v.remove(1);
+    println!("{:?} (removi {removido})", v);
+    println!("tem 8? {}", v.contains(&8));
+    v.reverse();
+    println!("invertido: {:?}", v);
+    let mut nomes = vec!["Caio", "ana", "Bia"];
+    nomes.sort_by_key(|n| n.to_lowercase());
+    println!("{:?}", nomes);
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>O que faz</th></tr>
+<tr><td><code>push(x)</code> / <code>pop()</code></td><td>põe no fim / tira do fim (<code>Option</code>)</td></tr>
+<tr><td><code>insert(i, x)</code> / <code>remove(i)</code></td><td>põe / tira na posição <code>i</code></td></tr>
+<tr><td><code>sort()</code>, <code>sort_by_key(f)</code></td><td>ordena</td></tr>
+<tr><td><code>dedup()</code></td><td>remove repetidos <strong>vizinhos</strong> (ordene antes)</td></tr>
+<tr><td><code>retain(f)</code></td><td>mantém só os que passam no teste</td></tr>
+<tr><td><code>contains(&amp;x)</code></td><td>tem esse valor?</td></tr>
+<tr><td><code>len()</code>, <code>is_empty()</code>, <code>clear()</code></td><td>tamanho, vazio?, esvaziar</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para criar um vetor com 1, 2 e 3:
+let v = [[vec!]][1, 2, 3];
+:::
+::: ex
+Complete para acessar sem risco de panic:
+let talvez = v.[[get]](10);
+:::
+::: mc 3
+O que <code>v.pop()</code> devolve num vetor vazio?
+- 0
+- Um panic
+- <code>None</code>
+- Um erro de compilação
+:::
+::: mc 2
+Para dobrar cada número dentro do vetor, qual laço usar?
+- <code>for x in v { x *= 2; }</code>
+- <code>for x in &amp;mut v { *x *= 2; }</code>
+- <code>for x in &amp;v { x *= 2; }</code>
+- Não é possível
+:::
+::: missao goal="src:\.push\(;;src:\.sort\(\);;out:[2, 5, 9, 14]"
+Comece com um vetor vazio (<code>Vec::new()</code>), acrescente com <code>push</code> os números 9, 2, 14 e 5, ordene com <code>sort</code> e imprima <code>[2, 5, 9, 14]</code>.
+--- script
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+}
+--- solucao
+fn main() {
+    let mut v: Vec<i32> = Vec::new();
+    v.push(9);
+    v.push(2);
+    v.push(14);
+    v.push(5);
+    v.sort();
+    println!("{:?}", v);
+}
+:::
+::: missao goal="src:for\s+\w+\s+in\s+&mut;;out:[2, 4, 6, 8]"
+Dobre todos os itens de <code>vec![1, 2, 3, 4]</code> <strong>no próprio vetor</strong>, com <code>for x in &amp;mut v</code>, e imprima <code>[2, 4, 6, 8]</code>.
+--- script
+fn main() {
+    let mut v = vec![1, 2, 3, 4];
+    println!("{:?}", v);
+}
+--- solucao
+fn main() {
+    let mut v = vec![1, 2, 3, 4];
+    for x in &mut v {
+        *x *= 2;
+    }
+    println!("{:?}", v);
+}
+:::
+::: missao goal="src:\.retain\(;;src:\.get\(;;out:[12, 30, 18];;out:posição 7: nenhuma"
+Do vetor <code>vec![12, 7, 30, 3, 18]</code>, mantenha só os números maiores que 10 com <code>retain</code> e imprima <code>[12, 30, 18]</code>. Depois use <code>get(7)</code> e imprima <code>posição 7: nenhuma</code> quando não existir.
+--- script
+fn main() {
+    let mut v = vec![12, 7, 30, 3, 18];
+    println!("{}", v[7]);
+}
+--- solucao
+fn main() {
+    let mut v = vec![12, 7, 30, 3, 18];
+    v.retain(|&x| x > 10);
+    println!("{:?}", v);
+    match v.get(7) {
+        Some(x) => println!("posição 7: {x}"),
+        None => println!("posição 7: nenhuma"),
+    }
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Vec::new()</code> ou <code>vec![…]</code>; <code>push</code>/<code>pop</code> no fim.</li>
+<li><code>v[i]</code> dá panic se não existir; <code>v.get(i)</code> devolve <code>Option</code>.</li>
+<li><code>for x in &amp;v</code> lê, <code>for x in &amp;mut v</code> altera (<code>*x</code>); não mude o vetor enquanto o percorre.</li>
+</ul>

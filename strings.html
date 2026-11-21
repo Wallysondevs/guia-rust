@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Strings em Rust — String, &amp;str, push_str, format!, UTF-8, split e trim | Guia Rust</title>
+<meta name="description" content="Trabalhando com texto em Rust: criar String, push_str e push, concatenar com + e format!, por que s[0] não compila (E0277), chars e bytes, e métodos úteis como split, trim, replace, to_uppercase, contains e lines.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Strings</span></h1>
+
+<p class="intro">Texto em Rust tem dois tipos principais, que você já conhece da aula de slices: <code>String</code> (dona do texto, pode crescer) e <code>&amp;str</code> (uma fatia emprestada). Os dois guardam <strong>UTF-8</strong>, então acentos e emojis funcionam, mas isso tem consequências que esta aula explica.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar e aumentar uma <code>String</code>, e a juntar textos com <code>+</code> e <code>format!</code>.</li>
+<li>Por que <code>texto[0]</code> não compila e como percorrer letras com <code>chars()</code>.</li>
+<li>Os métodos mais usados: <code>split</code>, <code>trim</code>, <code>replace</code>, <code>contains</code>, <code>to_uppercase</code>, <code>lines</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Criando e aumentando</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut s = String::new();
+    s.push_str("Olá");
+    s.push(',');
+    s.push_str(" Rust");
+    println!("{s}");
+    let a = "texto".to_string();
+    let b = String::from("texto");
+    println!("{}", a == b);
+}</pre>
+<pre class="term" data-cwd="~/projetos/criar">$ cargo run
+   Compiling criar v0.1.0 (/home/ana/projetos/criar)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/criar`
+Olá, Rust
+true</pre>
+<p><code>push_str</code> acrescenta um texto; <code>push</code>, um caractere (<code>char</code>, com aspas simples). <code>to_string()</code> e <code>String::from</code> fazem a mesma coisa.</p>
+
+<hr>
+<h2>2. Juntando textos</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let nome = String::from("Ana");
+    let sobrenome = String::from("Souza");
+    let completo = nome + " " + &amp;sobrenome;
+    println!("{completo}");
+    let cidade = "Recife";
+    let uf = "PE";
+    let endereco = format!("{cidade} - {uf}, {}", 2026);
+    println!("{endereco}");
+    let partes = ["a", "b", "c"];
+    println!("{}", partes.join("-"));
+}</pre>
+<pre class="term" data-cwd="~/projetos/juntar">$ cargo run
+   Compiling juntar v0.1.0 (/home/ana/projetos/juntar)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/juntar`
+Ana Souza
+Recife - PE, 2026
+a-b-c</pre>
+<p>O <code>+</code> <strong>consome</strong> a String da esquerda (<code>nome</code> não vale mais depois) e precisa de <code>&amp;str</code> à direita (por isso o <code>&amp;sobrenome</code>). Na prática, o <code>format!</code> é mais claro e não move nada.</p>
+
+<hr>
+<h2>3. Quando dá errado: índice num texto</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let s = String::from("olá");
+    let primeira = s[0];
+    println!("{primeira}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/indice">$ cargo run
+   Compiling indice v0.1.0 (/home/ana/projetos/indice)
+error[E0277]: the type `str` cannot be indexed by `{integer}`
+ --&gt; src/main.rs:3:22
+  |
+3 |     let primeira = s[0];
+  |                      ^ string indices are ranges of `usize`
+  |
+  = help: the trait `SliceIndex&lt;str&gt;` is not implemented for `{integer}`
+  = note: you can use `.chars().nth()` or `.bytes().nth()`
+          for more information, see chapter 8 in The Book: &lt;https://doc.rust-lang.org/book/ch08-02-strings.html#indexing-into-strings&gt;
+help: `usize` implements trait `SliceIndex&lt;T&gt;`
+ --&gt; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/slice/index.rs:179:0
+  |
+  = note: `SliceIndex&lt;[T]&gt;`
+ --&gt; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/bstr/traits.rs:201:0
+  |
+  = note: `SliceIndex&lt;ByteStr&gt;`
+  = note: required for `String` to implement `Index&lt;{integer}&gt;`
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `indice` (bin "indice") due to 1 previous error</pre>
+<p>Em UTF-8, uma letra pode ocupar de 1 a 4 bytes, então “a posição 0” é ambígua (o byte? a letra?). Em vez de adivinhar, o Rust não implementa índice em texto. Escolha o que você quer:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let s = "pé🦀";
+    println!("bytes: {}", s.len());
+    println!("letras: {}", s.chars().count());
+    for c in s.chars() {
+        print!("[{c}] ");
+    }
+    println!();
+    println!("{:?}", s.bytes().collect::&lt;Vec&lt;u8&gt;&gt;());
+    println!("terceira letra: {:?}", s.chars().nth(2));
+}</pre>
+<pre class="term" data-cwd="~/projetos/chars">$ cargo run
+   Compiling chars v0.1.0 (/home/ana/projetos/chars)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/chars`
+bytes: 7
+letras: 3
+[p] [é] [🦀] 
+[112, 195, 169, 240, 159, 166, 128]
+terceira letra: Some('🦀')</pre>
+
+<hr>
+<h2>4. Métodos do dia a dia</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let linha = "  nome=Ana;idade=28;cidade=Recife  ";
+    let limpa = linha.trim();
+    println!("[{limpa}]");
+    for campo in limpa.split(';') {
+        let (chave, valor) = campo.split_once('=').unwrap();
+        println!("{chave:&gt;7}: {valor}");
+    }
+    println!("{}", limpa.contains("Recife"));
+    println!("{}", limpa.starts_with("nome"));
+    println!("{}", limpa.replace(";", " | "));
+    println!("{}", "rust".to_uppercase());
+    let poema = "linha um\nlinha dois\nlinha três";
+    for (i, l) in poema.lines().enumerate() {
+        println!("{}: {l}", i + 1);
+    }
+    let palavras: Vec&lt;&amp;str&gt; = "  muitos   espaços aqui ".split_whitespace().collect();
+    println!("{:?}", palavras);
+}</pre>
+<pre class="term" data-cwd="~/projetos/metodos">$ cargo run
+   Compiling metodos v0.1.0 (/home/ana/projetos/metodos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running `target/debug/metodos`
+[nome=Ana;idade=28;cidade=Recife]
+   nome: Ana
+  idade: 28
+ cidade: Recife
+true
+true
+nome=Ana | idade=28 | cidade=Recife
+RUST
+1: linha um
+2: linha dois
+3: linha três
+["muitos", "espaços", "aqui"]</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>O que faz</th></tr>
+<tr><td><code>trim()</code></td><td>tira espaços (e <code>\n</code>) das pontas</td></tr>
+<tr><td><code>split(';')</code>, <code>split_whitespace()</code>, <code>lines()</code></td><td>divide em pedaços</td></tr>
+<tr><td><code>split_once('=')</code></td><td>divide na primeira ocorrência, devolve <code>Option&lt;(&amp;str, &amp;str)&gt;</code></td></tr>
+<tr><td><code>contains</code>, <code>starts_with</code>, <code>ends_with</code></td><td>perguntas que devolvem <code>bool</code></td></tr>
+<tr><td><code>replace(a, b)</code></td><td>nova String trocando <code>a</code> por <code>b</code></td></tr>
+<tr><td><code>to_uppercase()</code>, <code>to_lowercase()</code></td><td>maiúsculas, minúsculas (com acentos)</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para acrescentar um texto à String:</p><div class="ex-code">s.<input data-answer="push_str" aria-label="resposta">(" mundo");</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para tirar os espaços das pontas:</p><div class="ex-code">let limpo = entrada.<input data-answer="trim" aria-label="resposta">();</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Por que <code>s[0]</code> não compila quando <code>s</code> é uma <code>String</code>?</p>
+<label><input type="radio" name="q1"> Porque Strings são imutáveis</label>
+<label><input type="radio" name="q1"> Porque em UTF-8 uma letra pode ter vários bytes, e o Rust não adivinha se você quer byte ou letra</label>
+<label><input type="radio" name="q1"> Porque o índice começa em 1</label>
+<label><input type="radio" name="q1"> Porque falta <code>&amp;</code></label></div>
+<div class="mc" data-answer="1"><p class="mc-q">Quantos bytes tem <code>"🦀"</code>?</p>
+<label><input type="radio" name="q2"> 4</label>
+<label><input type="radio" name="q2"> 1</label>
+<label><input type="radio" name="q2"> 2</label>
+<label><input type="radio" name="q2"> 3</label></div>
+<div class="trycmd" data-goal="src:format!\(;;out:Ana Souza (28 anos)">
+<p class="try-task"><strong>Missão:</strong> Com as variáveis <code>nome</code>, <code>sobrenome</code> e <code>idade</code>, monte com <code>format!</code> a String <code>Ana Souza (28 anos)</code> e imprima.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let nome = "Ana";
+    let sobrenome = "Souza";
+    let idade = 28;
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let nome = "Ana";
+    let sobrenome = "Souza";
+    let idade = 28;
+    let texto = format!("{nome} {sobrenome} ({idade} anos)");
+    println!("{texto}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+Ana Souza (28 anos)
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\.split\(|\.split_whitespace\(;;out:Palavras: 5;;out:Maior: paralelepípedo">
+<p class="try-task"><strong>Missão:</strong> Conte as palavras de <code>"o rato roeu o paralelepípedo"</code> e ache a maior (em letras, com <code>chars().count()</code>). Imprima <code>Palavras: 5</code> e <code>Maior: paralelepípedo</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let frase = "o rato roeu o paralelepípedo";
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let frase = "o rato roeu o paralelepípedo";
+    let palavras: Vec&lt;&amp;str&gt; = frase.split_whitespace().collect();
+    println!("Palavras: {}", palavras.len());
+    let mut maior = palavras[0];
+    for p in &amp;palavras {
+        if p.chars().count() &gt; maior.chars().count() {
+            maior = p;
+        }
+    }
+    println!("Maior: {maior}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+Palavras: 5
+Maior: paralelepípedo
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\.chars\(\);;src:\.rev\(\);;out:oãçac;;out:Letras: 5">
+<p class="try-task"><strong>Missão:</strong> Inverta a palavra <code>"cação"</code>, letra por letra (inverter os bytes quebraria os acentos). Com <code>.chars().rev().collect::&lt;String&gt;()</code>, imprima <code>oãçac</code> e, na linha seguinte, <code>Letras: 5</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let palavra = "cação";
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let palavra = "cação";
+    let invertida: String = palavra.chars().rev().collect();
+    println!("{invertida}");
+    println!("Letras: {}", palavra.chars().count());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+oãçac
+Letras: 5
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>String</code> cresce com <code>push_str</code>/<code>push</code>; junte textos com <code>format!</code> (ou <code>+</code>, que move).</li>
+<li>Não há índice em texto: use <code>chars()</code> para letras e <code>bytes()</code> para bytes.</li>
+<li><code>trim</code>, <code>split</code>, <code>lines</code>, <code>replace</code>, <code>contains</code> e <code>to_uppercase</code> resolvem quase tudo.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

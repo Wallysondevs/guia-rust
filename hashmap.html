@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HashMap em Rust — insert, get, entry, contar palavras e BTreeMap | Guia Rust</title>
+<meta name="description" content="Dicionários em Rust com HashMap&lt;K, V&gt;: insert, get, contains_key, remove, percorrer pares, a API entry().or_insert() para contar, ownership das chaves e BTreeMap e HashSet.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">HashMap</span></h1>
+
+<p class="intro">Um <code>HashMap&lt;K, V&gt;</code> guarda pares <strong>chave → valor</strong>, como uma agenda (nome → telefone) ou um placar (time → pontos). Você procura pelo nome da chave, não pela posição. Ele mora em <code>std::collections</code>, então precisa de um <code>use</code>.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A inserir, ler, atualizar e remover pares.</li>
+<li>A API <code>entry</code>, perfeita para contar ou agrupar.</li>
+<li>Quando usar <code>BTreeMap</code> (ordenado) e <code>HashSet</code> (só chaves).</li>
+</ul></div>
+
+<hr>
+<h2>1. O básico</h2>
+<pre class="file" data-file="src/main.rs">use std::collections::HashMap;
+
+fn main() {
+    let mut estoque: HashMap&lt;String, u32&gt; = HashMap::new();
+    estoque.insert(String::from("caneta"), 40);
+    estoque.insert(String::from("caderno"), 12);
+    estoque.insert(String::from("caneta"), 35);
+
+    println!("canetas: {:?}", estoque.get("caneta"));
+    println!("borrachas: {:?}", estoque.get("borracha"));
+    println!("tem caderno? {}", estoque.contains_key("caderno"));
+    println!("itens: {}", estoque.len());
+    if let Some(qtd) = estoque.remove("caderno") {
+        println!("removi {qtd} cadernos");
+    }
+    println!("{:?}", estoque);
+}</pre>
+<pre class="term" data-cwd="~/projetos/basico">$ cargo run
+   Compiling basico v0.1.0 (/home/ana/projetos/basico)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/basico`
+canetas: Some(35)
+borrachas: None
+tem caderno? true
+itens: 2
+removi 12 cadernos
+{"caneta": 35}</pre>
+<p>Inserir uma chave que já existe <strong>substitui</strong> o valor (as canetas foram de 40 para 35). O <code>get</code> devolve <code>Option&lt;&amp;V&gt;</code>, porque a chave pode não existir.</p>
+
+<hr>
+<h2>2. Percorrendo: a ordem não é garantida</h2>
+<pre class="file" data-file="src/main.rs">use std::collections::HashMap;
+
+fn main() {
+    let mut placar = HashMap::new();
+    placar.insert("Azul", 3);
+    placar.insert("Vermelho", 5);
+    placar.insert("Verde", 1);
+    let mut times: Vec&lt;_&gt; = placar.iter().collect();
+    times.sort_by(|a, b| b.1.cmp(a.1));
+    for (time, pontos) in times {
+        println!("{time}: {pontos}");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/percorrer">$ cargo run
+   Compiling percorrer v0.1.0 (/home/ana/projetos/percorrer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/percorrer`
+Vermelho: 5
+Azul: 3
+Verde: 1</pre>
+<p>O <code>HashMap</code> não guarda os pares em ordem nenhuma (e a ordem pode mudar a cada execução). Para mostrar ordenado, copie os pares para um vetor e ordene, como acima, ou use um <code>BTreeMap</code>.</p>
+
+<hr>
+<h2>3. <code>entry</code>: inserir ou atualizar</h2>
+<pre class="file" data-file="src/main.rs">use std::collections::BTreeMap;
+
+fn main() {
+    let texto = "o sol e o mar e o céu";
+    let mut contagem = BTreeMap::new();
+    for palavra in texto.split_whitespace() {
+        let n = contagem.entry(palavra).or_insert(0);
+        *n += 1;
+    }
+    println!("{:?}", contagem);
+}</pre>
+<pre class="term" data-cwd="~/projetos/entry">$ cargo run
+   Compiling entry v0.1.0 (/home/ana/projetos/entry)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/entry`
+{"céu": 1, "e": 2, "mar": 1, "o": 3, "sol": 1}</pre>
+<p><code>entry(chave).or_insert(0)</code> devolve uma referência mutável ao valor: o que já existia ou um <code>0</code> recém-inserido. O <code>*n += 1</code> soma por essa referência. O <code>BTreeMap</code> tem a mesma interface do <code>HashMap</code>, mas mantém as chaves <strong>ordenadas</strong>, por isso a saída sai em ordem alfabética.</p>
+
+<hr>
+<h2>4. Quando dá errado: a chave foi movida</h2>
+<pre class="file" data-file="src/main.rs">use std::collections::HashMap;
+
+fn main() {
+    let mut idades = HashMap::new();
+    let nome = String::from("Ana");
+    idades.insert(nome, 28);
+    println!("inseri {nome}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/chave-movida">$ cargo run
+   Compiling chave-movida v0.1.0 (/home/ana/projetos/chave-movida)
+error[E0382]: borrow of moved value: `nome`
+ --&gt; src/main.rs:7:23
+  |
+5 |     let nome = String::from("Ana");
+  |         ---- move occurs because `nome` has type `String`, which does not implement the `Copy` trait
+6 |     idades.insert(nome, 28);
+  |                   ---- value moved here
+7 |     println!("inseri {nome}");
+  |                       ^^^^ value borrowed here after move
+  |
+help: consider cloning the value if the performance cost is acceptable
+  |
+6 |     idades.insert(nome.clone(), 28);
+  |                       ++++++++
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `chave-movida` (bin "chave-movida") due to 1 previous error</pre>
+<p>O <code>insert</code> recebe a posse da chave e do valor. Depois dele, <code>nome</code> pertence ao mapa. Se precisar da String depois, insira um <code>nome.clone()</code> ou imprima antes.</p>
+
+<hr>
+<h2>5. <code>HashSet</code>: só as chaves</h2>
+<pre class="file" data-file="src/main.rs">use std::collections::HashSet;
+
+fn main() {
+    let visitas = ["Ana", "Bia", "Ana", "Caio", "Bia"];
+    let unicos: HashSet&lt;&amp;str&gt; = visitas.iter().cloned().collect();
+    println!("{} visitantes diferentes", unicos.len());
+    println!("Caio veio? {}", unicos.contains("Caio"));
+    let a: HashSet&lt;i32&gt; = [1, 2, 3].into_iter().collect();
+    let b: HashSet&lt;i32&gt; = [2, 3, 4].into_iter().collect();
+    let mut comuns: Vec&lt;_&gt; = a.intersection(&amp;b).collect();
+    comuns.sort();
+    println!("em comum: {:?}", comuns);
+}</pre>
+<pre class="term" data-cwd="~/projetos/hashset">$ cargo run
+   Compiling hashset v0.1.0 (/home/ana/projetos/hashset)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.19s
+     Running `target/debug/hashset`
+3 visitantes diferentes
+Caio veio? true
+em comum: [2, 3]</pre>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete a importação:</p><div class="ex-code">use std::collections::<input data-answer="HashMap" aria-label="resposta">;</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para inserir 0 só se a chave não existir:</p><div class="ex-code">let n = mapa.entry(chave).<input data-answer="or_insert" aria-label="resposta">(0);</div></div>
+<div class="mc" data-answer="4"><p class="mc-q">O que <code>mapa.get("x")</code> devolve quando a chave não existe?</p>
+<label><input type="radio" name="q1"> 0</label>
+<label><input type="radio" name="q1"> Um panic</label>
+<label><input type="radio" name="q1"> Uma String vazia</label>
+<label><input type="radio" name="q1"> <code>None</code></label></div>
+<div class="mc" data-answer="2"><p class="mc-q">Qual coleção mantém as chaves em ordem?</p>
+<label><input type="radio" name="q2"> <code>HashMap</code></label>
+<label><input type="radio" name="q2"> <code>BTreeMap</code></label>
+<label><input type="radio" name="q2"> <code>Vec</code></label>
+<label><input type="radio" name="q2"> <code>HashSet</code></label></div>
+<div class="trycmd" data-goal="src:HashMap;;src:\.insert\(;;out:Telefone da Bia: 99999-2222;;out:Caio: não cadastrado">
+<p class="try-task"><strong>Missão:</strong> Crie uma agenda <code>HashMap</code> com <code>Ana → 99999-1111</code> e <code>Bia → 99999-2222</code>. Imprima <code>Telefone da Bia: 99999-2222</code> e, para <code>Caio</code>, <code>Caio: não cadastrado</code> (use <code>get</code> com <code>match</code> ou <code>if let</code>).</p>
+<pre class="script" data-file="src/main.rs">
+use std::collections::HashMap;
+
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::collections::HashMap;
+
+fn main() {
+    let mut agenda = HashMap::new();
+    agenda.insert("Ana", "99999-1111");
+    agenda.insert("Bia", "99999-2222");
+    if let Some(t) = agenda.get("Bia") {
+        println!("Telefone da Bia: {t}");
+    }
+    match agenda.get("Caio") {
+        Some(t) =&gt; println!("Caio: {t}"),
+        None =&gt; println!("Caio: não cadastrado"),
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/missao`
+Telefone da Bia: 99999-2222
+Caio: não cadastrado
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\.entry\(;;src:or_insert;;out:{'a': 3, 'b': 1, 'n': 2}">
+<p class="try-task"><strong>Missão:</strong> Conte as letras de <code>"banana"</code> com <code>entry(c).or_insert(0)</code> num <code>BTreeMap</code> e imprima com <code>{:?}</code>: <code>{'a': 3, 'b': 1, 'n': 2}</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::collections::BTreeMap;
+
+fn main() {
+    let palavra = "banana";
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::collections::BTreeMap;
+
+fn main() {
+    let palavra = "banana";
+    let mut contagem = BTreeMap::new();
+    for c in palavra.chars() {
+        *contagem.entry(c).or_insert(0) += 1;
+    }
+    println!("{:?}", contagem);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running `target/debug/missao`
+{'a': 3, 'b': 1, 'n': 2}
+</pre>
+</div>
+<div class="trycmd" data-goal="src:HashSet;;out:Cidades diferentes: 3">
+<p class="try-task"><strong>Missão:</strong> Use um <code>HashSet</code> para contar quantas cidades diferentes há em <code>["Recife", "Natal", "Recife", "Olinda", "Natal"]</code> e imprima <code>Cidades diferentes: 3</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let cidades = ["Recife", "Natal", "Recife", "Olinda", "Natal"];
+    println!("Cidades diferentes: {}", cidades.len());
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::collections::HashSet;
+
+fn main() {
+    let cidades = ["Recife", "Natal", "Recife", "Olinda", "Natal"];
+    let unicas: HashSet&lt;&amp;str&gt; = cidades.into_iter().collect();
+    println!("Cidades diferentes: {}", unicas.len());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running `target/debug/missao`
+Cidades diferentes: 3
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>use std::collections::HashMap;</code>; <code>insert</code>, <code>get</code> (<code>Option</code>), <code>remove</code>, <code>contains_key</code>.</li>
+<li><code>entry(k).or_insert(v)</code> insere ou devolve o valor existente, ótimo para contar.</li>
+<li>O <code>HashMap</code> não tem ordem; <code>BTreeMap</code> tem. <code>HashSet</code> guarda valores únicos.</li>
+<li><code>insert</code> recebe a posse da chave e do valor.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -38,6 +38,11 @@ var NIVEIS = [
       ["option.html", "Option em detalhe"],
       ["result.html", "Result e panic!"],
       ["interrogacao.html", "O operador ?"]
+    ]},
+    { grupo: "Coleções", itens: [
+      ["vec.html", "Vetores (Vec)"],
+      ["strings.html", "Strings"],
+      ["hashmap.html", "HashMap"]
     ]}
   ]}
 ];

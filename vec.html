@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vec em Rust — criar, push, pop, get, iterar, ordenar e remover | Guia Rust</title>
+<meta name="description" content="Vetores em Rust com Vec&lt;T&gt;: vec!, push, pop, acesso por índice e com get, percorrer com for e &amp;mut, sort, dedup, retain, contains, insert, remove e o panic de índice fora do vetor.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Vetores (<span class="hl">Vec</span>)</h1>
+
+<p class="intro">O <code>Vec&lt;T&gt;</code> (vetor) é a lista que cresce: guarda vários valores do mesmo tipo, um depois do outro, e aumenta conforme você acrescenta itens. É a coleção mais usada em Rust.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar vetores com <code>Vec::new()</code> e <code>vec![]</code>, acrescentar e tirar itens.</li>
+<li>A diferença entre <code>v[i]</code> (panic se não existir) e <code>v.get(i)</code> (devolve <code>Option</code>).</li>
+<li>A percorrer, alterar, ordenar e filtrar o vetor.</li>
+</ul></div>
+
+<hr>
+<h2>1. Criando e acrescentando</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut compras: Vec&lt;String&gt; = Vec::new();
+    compras.push(String::from("arroz"));
+    compras.push(String::from("feijão"));
+    let numeros = vec![10, 20, 30];
+    println!("{:?} ({} itens)", compras, compras.len());
+    println!("{:?} vazio? {}", numeros, numeros.is_empty());
+    let mut pilha = vec![1, 2, 3];
+    let topo = pilha.pop();
+    println!("tirei {:?}, sobrou {:?}", topo, pilha);
+}</pre>
+<pre class="term" data-cwd="~/projetos/criar">$ cargo run
+   Compiling criar v0.1.0 (/home/ana/projetos/criar)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/criar`
+["arroz", "feijão"] (2 itens)
+[10, 20, 30] vazio? false
+tirei Some(3), sobrou [1, 2]</pre>
+<p>O <code>vec![…]</code> é uma macro que cria o vetor já com valores. Com <code>Vec::new()</code>, o vetor nasce vazio e o tipo vem da anotação (<code>Vec&lt;String&gt;</code>) ou do primeiro <code>push</code>.</p>
+
+<hr>
+<h2>2. Lendo: índice ou <code>get</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let notas = vec![7, 9, 10];
+    let segunda = notas[1];
+    println!("segunda: {segunda}");
+    match notas.get(5) {
+        Some(n) =&gt; println!("sexta: {n}"),
+        None =&gt; println!("não existe a posição 5"),
+    }
+    println!("primeira: {:?}, última: {:?}", notas.first(), notas.last());
+}</pre>
+<pre class="term" data-cwd="~/projetos/ler">$ cargo run
+   Compiling ler v0.1.0 (/home/ana/projetos/ler)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ler`
+segunda: 9
+não existe a posição 5
+primeira: Some(7), última: Some(10)</pre>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let notas = vec![7, 9, 10];
+    let i = 10;
+    println!("{}", notas[i]);
+}</pre>
+<pre class="term" data-cwd="~/projetos/ler-panic">$ cargo run
+   Compiling ler-panic v0.1.0 (/home/ana/projetos/ler-panic)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ler-panic`
+
+thread 'main' (227892) panicked at src/main.rs:4:25:
+index out of bounds: the len is 3 but the index is 10
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace</pre>
+<p>Use <code>v[i]</code> quando o índice com certeza existe (e um erro seria um bug). Use <code>v.get(i)</code> quando pode não existir, por exemplo um número digitado pelo usuário.</p>
+
+<hr>
+<h2>3. Percorrendo e alterando</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut precos = vec![10.0, 25.5, 8.0];
+    for p in &amp;precos {
+        print!("{p} ");
+    }
+    println!();
+    for p in &amp;mut precos {
+        *p *= 1.1;
+    }
+    println!("{:.2?}", precos);
+    let total: f64 = precos.iter().sum();
+    println!("total: {total:.2}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/percorrer">$ cargo run
+   Compiling percorrer v0.1.0 (/home/ana/projetos/percorrer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/percorrer`
+10 25.5 8 
+[11.00, 28.05, 8.80]
+total: 47.85</pre>
+<p><code>for p in &amp;v</code> empresta cada item para leitura. <code>for p in &amp;mut v</code> empresta para escrita: o <code>*p</code> (<em>desreferência</em>) acessa o valor apontado pela referência para poder mudá-lo. Sem o <code>&amp;</code>, o <code>for</code> consome o vetor, que não pode ser usado depois.</p>
+
+<hr>
+<h2>4. Quando dá errado: mudar o vetor dentro do <code>for</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut v = vec![1, 2, 3];
+    for x in &amp;v {
+        if *x == 2 {
+            v.push(4);
+        }
+    }
+    println!("{:?}", v);
+}</pre>
+<pre class="term" data-cwd="~/projetos/for-push">$ cargo run
+   Compiling for-push v0.1.0 (/home/ana/projetos/for-push)
+error[E0502]: cannot borrow `v` as mutable because it is also borrowed as immutable
+ --&gt; src/main.rs:5:13
+  |
+3 |       for x in &amp;v {
+  |       -        --
+  |       |        |
+  |       |        immutable borrow occurs here
+  |  _____|        immutable borrow later used here
+  | |
+4 | |         if *x == 2 {
+5 | |             v.push(4);
+  | |             ^^^^^^^^^ mutable borrow occurs here
+6 | |         }
+7 | |     }
+  | |_____- this for loop borrows `v` immutably, preventing mutation within its body
+  |
+  = help: consider using an index-based loop instead, or collecting modifications into a separate collection
+
+For more information about this error, try `rustc --explain E0502`.
+error: could not compile `for-push` (bin "for-push") due to 1 previous error</pre>
+<p>O <code>for</code> empresta <code>v</code> para leitura durante o laço inteiro; o <code>push</code> precisaria de <code>&amp;mut v</code> ao mesmo tempo. É a regra do borrowing, e ela evita um bug clássico: acrescentar itens numa lista enquanto se anda por ela.</p>
+
+<hr>
+<h2>5. Ordenar, procurar, remover</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut v = vec![5, 3, 8, 3, 1, 8, 2];
+    v.sort();
+    println!("ordenado: {:?}", v);
+    v.dedup();
+    println!("sem repetidos seguidos: {:?}", v);
+    v.retain(|&amp;x| x != 5);
+    println!("sem o 5: {:?}", v);
+    v.insert(0, 100);
+    let removido = v.remove(1);
+    println!("{:?} (removi {removido})", v);
+    println!("tem 8? {}", v.contains(&amp;8));
+    v.reverse();
+    println!("invertido: {:?}", v);
+    let mut nomes = vec!["Caio", "ana", "Bia"];
+    nomes.sort_by_key(|n| n.to_lowercase());
+    println!("{:?}", nomes);
+}</pre>
+<pre class="term" data-cwd="~/projetos/metodos">$ cargo run
+   Compiling metodos v0.1.0 (/home/ana/projetos/metodos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/metodos`
+ordenado: [1, 2, 3, 3, 5, 8, 8]
+sem repetidos seguidos: [1, 2, 3, 5, 8]
+sem o 5: [1, 2, 3, 8]
+[100, 2, 3, 8] (removi 1)
+tem 8? true
+invertido: [8, 3, 2, 100]
+["ana", "Bia", "Caio"]</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>O que faz</th></tr>
+<tr><td><code>push(x)</code> / <code>pop()</code></td><td>põe no fim / tira do fim (<code>Option</code>)</td></tr>
+<tr><td><code>insert(i, x)</code> / <code>remove(i)</code></td><td>põe / tira na posição <code>i</code></td></tr>
+<tr><td><code>sort()</code>, <code>sort_by_key(f)</code></td><td>ordena</td></tr>
+<tr><td><code>dedup()</code></td><td>remove repetidos <strong>vizinhos</strong> (ordene antes)</td></tr>
+<tr><td><code>retain(f)</code></td><td>mantém só os que passam no teste</td></tr>
+<tr><td><code>contains(&amp;x)</code></td><td>tem esse valor?</td></tr>
+<tr><td><code>len()</code>, <code>is_empty()</code>, <code>clear()</code></td><td>tamanho, vazio?, esvaziar</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para criar um vetor com 1, 2 e 3:</p><div class="ex-code">let v = <input data-answer="vec!" aria-label="resposta">[1, 2, 3];</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para acessar sem risco de panic:</p><div class="ex-code">let talvez = v.<input data-answer="get" aria-label="resposta">(10);</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">O que <code>v.pop()</code> devolve num vetor vazio?</p>
+<label><input type="radio" name="q1"> 0</label>
+<label><input type="radio" name="q1"> Um panic</label>
+<label><input type="radio" name="q1"> <code>None</code></label>
+<label><input type="radio" name="q1"> Um erro de compilação</label></div>
+<div class="mc" data-answer="2"><p class="mc-q">Para dobrar cada número dentro do vetor, qual laço usar?</p>
+<label><input type="radio" name="q2"> <code>for x in v { x *= 2; }</code></label>
+<label><input type="radio" name="q2"> <code>for x in &amp;mut v { *x *= 2; }</code></label>
+<label><input type="radio" name="q2"> <code>for x in &amp;v { x *= 2; }</code></label>
+<label><input type="radio" name="q2"> Não é possível</label></div>
+<div class="trycmd" data-goal="src:\.push\(;;src:\.sort\(\);;out:[2, 5, 9, 14]">
+<p class="try-task"><strong>Missão:</strong> Comece com um vetor vazio (<code>Vec::new()</code>), acrescente com <code>push</code> os números 9, 2, 14 e 5, ordene com <code>sort</code> e imprima <code>[2, 5, 9, 14]</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut v: Vec&lt;i32&gt; = Vec::new();
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut v: Vec&lt;i32&gt; = Vec::new();
+    v.push(9);
+    v.push(2);
+    v.push(14);
+    v.push(5);
+    v.sort();
+    println!("{:?}", v);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/missao`
+[2, 5, 9, 14]
+</pre>
+</div>
+<div class="trycmd" data-goal="src:for\s+\w+\s+in\s+&amp;mut;;out:[2, 4, 6, 8]">
+<p class="try-task"><strong>Missão:</strong> Dobre todos os itens de <code>vec![1, 2, 3, 4]</code> <strong>no próprio vetor</strong>, com <code>for x in &amp;mut v</code>, e imprima <code>[2, 4, 6, 8]</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut v = vec![1, 2, 3, 4];
+    println!("{:?}", v);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut v = vec![1, 2, 3, 4];
+    for x in &amp;mut v {
+        *x *= 2;
+    }
+    println!("{:?}", v);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+[2, 4, 6, 8]
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\.retain\(;;src:\.get\(;;out:[12, 30, 18];;out:posição 7: nenhuma">
+<p class="try-task"><strong>Missão:</strong> Do vetor <code>vec![12, 7, 30, 3, 18]</code>, mantenha só os números maiores que 10 com <code>retain</code> e imprima <code>[12, 30, 18]</code>. Depois use <code>get(7)</code> e imprima <code>posição 7: nenhuma</code> quando não existir.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut v = vec![12, 7, 30, 3, 18];
+    println!("{}", v[7]);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut v = vec![12, 7, 30, 3, 18];
+    v.retain(|&amp;x| x &gt; 10);
+    println!("{:?}", v);
+    match v.get(7) {
+        Some(x) =&gt; println!("posição 7: {x}"),
+        None =&gt; println!("posição 7: nenhuma"),
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+[12, 30, 18]
+posição 7: nenhuma
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Vec::new()</code> ou <code>vec![…]</code>; <code>push</code>/<code>pop</code> no fim.</li>
+<li><code>v[i]</code> dá panic se não existir; <code>v.get(i)</code> devolve <code>Option</code>.</li>
+<li><code>for x in &amp;v</code> lê, <code>for x in &amp;mut v</code> altera (<code>*x</code>); não mude o vetor enquanto o percorre.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

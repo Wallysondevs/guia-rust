@@ -1,0 +1,190 @@
+---
+slug: strings
+menu: Strings
+titulo: Strings em Rust — String, &str, push_str, format!, UTF-8, split e trim | Guia Rust
+desc: Trabalhando com texto em Rust: criar String, push_str e push, concatenar com + e format!, por que s[0] não compila (E0277), chars e bytes, e métodos úteis como split, trim, replace, to_uppercase, contains e lines.
+h1: <span class="hl">Strings</span>
+nivel: n2
+grupo: Coleções
+---
+<p class="intro">Texto em Rust tem dois tipos principais, que você já conhece da aula de slices: <code>String</code> (dona do texto, pode crescer) e <code>&amp;str</code> (uma fatia emprestada). Os dois guardam <strong>UTF-8</strong>, então acentos e emojis funcionam, mas isso tem consequências que esta aula explica.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar e aumentar uma <code>String</code>, e a juntar textos com <code>+</code> e <code>format!</code>.</li>
+<li>Por que <code>texto[0]</code> não compila e como percorrer letras com <code>chars()</code>.</li>
+<li>Os métodos mais usados: <code>split</code>, <code>trim</code>, <code>replace</code>, <code>contains</code>, <code>to_uppercase</code>, <code>lines</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Criando e aumentando</h2>
+::: exemplo criar
+fn main() {
+    let mut s = String::new();
+    s.push_str("Olá");
+    s.push(',');
+    s.push_str(" Rust");
+    println!("{s}");
+    let a = "texto".to_string();
+    let b = String::from("texto");
+    println!("{}", a == b);
+}
+:::
+<p><code>push_str</code> acrescenta um texto; <code>push</code>, um caractere (<code>char</code>, com aspas simples). <code>to_string()</code> e <code>String::from</code> fazem a mesma coisa.</p>
+
+<hr>
+<h2>2. Juntando textos</h2>
+::: exemplo juntar
+fn main() {
+    let nome = String::from("Ana");
+    let sobrenome = String::from("Souza");
+    let completo = nome + " " + &sobrenome;
+    println!("{completo}");
+    let cidade = "Recife";
+    let uf = "PE";
+    let endereco = format!("{cidade} - {uf}, {}", 2026);
+    println!("{endereco}");
+    let partes = ["a", "b", "c"];
+    println!("{}", partes.join("-"));
+}
+:::
+<p>O <code>+</code> <strong>consome</strong> a String da esquerda (<code>nome</code> não vale mais depois) e precisa de <code>&amp;str</code> à direita (por isso o <code>&amp;sobrenome</code>). Na prática, o <code>format!</code> é mais claro e não move nada.</p>
+
+<hr>
+<h2>3. Quando dá errado: índice num texto</h2>
+::: exemplo indice falha
+fn main() {
+    let s = String::from("olá");
+    let primeira = s[0];
+    println!("{primeira}");
+}
+:::
+<p>Em UTF-8, uma letra pode ocupar de 1 a 4 bytes, então “a posição 0” é ambígua (o byte? a letra?). Em vez de adivinhar, o Rust não implementa índice em texto. Escolha o que você quer:</p>
+::: exemplo chars
+fn main() {
+    let s = "pé🦀";
+    println!("bytes: {}", s.len());
+    println!("letras: {}", s.chars().count());
+    for c in s.chars() {
+        print!("[{c}] ");
+    }
+    println!();
+    println!("{:?}", s.bytes().collect::<Vec<u8>>());
+    println!("terceira letra: {:?}", s.chars().nth(2));
+}
+:::
+
+<hr>
+<h2>4. Métodos do dia a dia</h2>
+::: exemplo metodos
+fn main() {
+    let linha = "  nome=Ana;idade=28;cidade=Recife  ";
+    let limpa = linha.trim();
+    println!("[{limpa}]");
+    for campo in limpa.split(';') {
+        let (chave, valor) = campo.split_once('=').unwrap();
+        println!("{chave:>7}: {valor}");
+    }
+    println!("{}", limpa.contains("Recife"));
+    println!("{}", limpa.starts_with("nome"));
+    println!("{}", limpa.replace(";", " | "));
+    println!("{}", "rust".to_uppercase());
+    let poema = "linha um\nlinha dois\nlinha três";
+    for (i, l) in poema.lines().enumerate() {
+        println!("{}: {l}", i + 1);
+    }
+    let palavras: Vec<&str> = "  muitos   espaços aqui ".split_whitespace().collect();
+    println!("{:?}", palavras);
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>O que faz</th></tr>
+<tr><td><code>trim()</code></td><td>tira espaços (e <code>\n</code>) das pontas</td></tr>
+<tr><td><code>split(';')</code>, <code>split_whitespace()</code>, <code>lines()</code></td><td>divide em pedaços</td></tr>
+<tr><td><code>split_once('=')</code></td><td>divide na primeira ocorrência, devolve <code>Option&lt;(&amp;str, &amp;str)&gt;</code></td></tr>
+<tr><td><code>contains</code>, <code>starts_with</code>, <code>ends_with</code></td><td>perguntas que devolvem <code>bool</code></td></tr>
+<tr><td><code>replace(a, b)</code></td><td>nova String trocando <code>a</code> por <code>b</code></td></tr>
+<tr><td><code>to_uppercase()</code>, <code>to_lowercase()</code></td><td>maiúsculas, minúsculas (com acentos)</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para acrescentar um texto à String:
+s.[[push_str]](" mundo");
+:::
+::: ex
+Complete para tirar os espaços das pontas:
+let limpo = entrada.[[trim]]();
+:::
+::: mc 2
+Por que <code>s[0]</code> não compila quando <code>s</code> é uma <code>String</code>?
+- Porque Strings são imutáveis
+- Porque em UTF-8 uma letra pode ter vários bytes, e o Rust não adivinha se você quer byte ou letra
+- Porque o índice começa em 1
+- Porque falta <code>&amp;</code>
+:::
+::: mc 1
+Quantos bytes tem <code>"🦀"</code>?
+- 4
+- 1
+- 2
+- 3
+:::
+::: missao goal="src:format!\(;;out:Ana Souza (28 anos)"
+Com as variáveis <code>nome</code>, <code>sobrenome</code> e <code>idade</code>, monte com <code>format!</code> a String <code>Ana Souza (28 anos)</code> e imprima.
+--- script
+fn main() {
+    let nome = "Ana";
+    let sobrenome = "Souza";
+    let idade = 28;
+}
+--- solucao
+fn main() {
+    let nome = "Ana";
+    let sobrenome = "Souza";
+    let idade = 28;
+    let texto = format!("{nome} {sobrenome} ({idade} anos)");
+    println!("{texto}");
+}
+:::
+::: missao goal="src:\.split\(|\.split_whitespace\(;;out:Palavras: 5;;out:Maior: paralelepípedo"
+Conte as palavras de <code>"o rato roeu o paralelepípedo"</code> e ache a maior (em letras, com <code>chars().count()</code>). Imprima <code>Palavras: 5</code> e <code>Maior: paralelepípedo</code>.
+--- script
+fn main() {
+    let frase = "o rato roeu o paralelepípedo";
+}
+--- solucao
+fn main() {
+    let frase = "o rato roeu o paralelepípedo";
+    let palavras: Vec<&str> = frase.split_whitespace().collect();
+    println!("Palavras: {}", palavras.len());
+    let mut maior = palavras[0];
+    for p in &palavras {
+        if p.chars().count() > maior.chars().count() {
+            maior = p;
+        }
+    }
+    println!("Maior: {maior}");
+}
+:::
+::: missao goal="src:\.chars\(\);;src:\.rev\(\);;out:oãçac;;out:Letras: 5"
+Inverta a palavra <code>"cação"</code>, letra por letra (inverter os bytes quebraria os acentos). Com <code>.chars().rev().collect::&lt;String&gt;()</code>, imprima <code>oãçac</code> e, na linha seguinte, <code>Letras: 5</code>.
+--- script
+fn main() {
+    let palavra = "cação";
+}
+--- solucao
+fn main() {
+    let palavra = "cação";
+    let invertida: String = palavra.chars().rev().collect();
+    println!("{invertida}");
+    println!("Letras: {}", palavra.chars().count());
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>String</code> cresce com <code>push_str</code>/<code>push</code>; junte textos com <code>format!</code> (ou <code>+</code>, que move).</li>
+<li>Não há índice em texto: use <code>chars()</code> para letras e <code>bytes()</code> para bytes.</li>
+<li><code>trim</code>, <code>split</code>, <code>lines</code>, <code>replace</code>, <code>contains</code> e <code>to_uppercase</code> resolvem quase tudo.</li>
+</ul>
