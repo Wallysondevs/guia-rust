@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projeto final em Rust — CLI parte 2: biblioteca, testes, stdin, variável de ambiente e release | Guia Rust</title>
+<meta name="description" content="Projeto final do Guia Rust, parte 2: separar a ferramenta resumo em lib.rs e main.rs, testes de unidade, doc-tests e testes de integração do binário, ler da entrada padrão, configurar por variável de ambiente e compilar a versão de release com cargo build --release.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projeto final: <span class="hl">CLI</span> (parte 2)</h1>
+
+<p class="intro">Na <a href="projeto-cli.html">parte 1</a>, o <strong>resumo</strong> ficou funcionando, mas todo num arquivo só e sem testes. Agora vamos deixá-lo com cara de projeto profissional: lógica numa biblioteca testável, testes de três tipos, leitura da entrada padrão (para usar com <code>|</code>), uma opção por variável de ambiente e o binário otimizado.</p>
+
+<hr>
+<h2>Passo 4: separar biblioteca e binário</h2>
+<p>Um pacote pode ter ao mesmo tempo <code>src/lib.rs</code> (uma biblioteca) e <code>src/main.rs</code> (o programa). O <code>main.rs</code> fica pequeno: lê os argumentos, chama a biblioteca e trata erros. Tudo que tem lógica vai para o <code>lib.rs</code>, onde é fácil de testar.</p>
+<pre class="file" data-file="src/lib.rs">//! Resumo de textos: conta linhas, palavras e as palavras mais frequentes.
+use std::collections::HashMap;
+use std::error::Error;
+use std::{env, fs, io};
+
+pub struct Config {
+    pub arquivo: String,
+    pub top: usize,
+    pub minimo: usize,
+}
+
+impl Config {
+    pub fn new(args: &amp;[String]) -&gt; Result&lt;Config, String&gt; {
+        if args.len() &lt; 2 {
+            return Err("faltou o nome do arquivo".to_string());
+        }
+        let arquivo = args[1].clone();
+        let top = match args.get(2) {
+            Some(t) =&gt; t.parse().map_err(|_| format!("'{t}' não é um número"))?,
+            None =&gt; 5,
+        };
+        let minimo = match env::var("RESUMO_MIN") {
+            Ok(v) =&gt; v.parse().map_err(|_| format!("RESUMO_MIN inválido: '{v}'"))?,
+            Err(_) =&gt; 1,
+        };
+        Ok(Config { arquivo, top, minimo })
+    }
+}
+
+/// Separa o texto em palavras minúsculas, sem pontuação nas pontas.
+///
+/// ```
+/// let p = resumo::palavras("Olá, mundo! Olá.");
+/// assert_eq!(p, vec!["olá", "mundo", "olá"]);
+/// ```
+pub fn palavras(texto: &amp;str) -&gt; Vec&lt;String&gt; {
+    texto
+        .split_whitespace()
+        .map(|p| p.trim_matches(|c: char| !c.is_alphanumeric()).to_lowercase())
+        .filter(|p| !p.is_empty())
+        .collect()
+}
+
+/// Conta as palavras com pelo menos `minimo` letras e ordena:
+/// mais frequentes primeiro; no empate, em ordem alfabética.
+pub fn ranking(palavras: &amp;[String], minimo: usize) -&gt; Vec&lt;(String, usize)&gt; {
+    let mut contagem: HashMap&lt;&amp;str, usize&gt; = HashMap::new();
+    for p in palavras.iter().filter(|p| p.chars().count() &gt;= minimo) {
+        *contagem.entry(p.as_str()).or_insert(0) += 1;
+    }
+    let mut r: Vec&lt;(String, usize)&gt; = contagem
+        .into_iter()
+        .map(|(p, n)| (p.to_string(), n))
+        .collect();
+    r.sort_by(|a, b| b.1.cmp(&amp;a.1).then(a.0.cmp(&amp;b.0)));
+    r
+}
+
+pub fn executar(config: Config) -&gt; Result&lt;(), Box&lt;dyn Error&gt;&gt; {
+    let texto = if config.arquivo == "-" {
+        io::read_to_string(io::stdin())?
+    } else {
+        fs::read_to_string(&amp;config.arquivo)
+            .map_err(|e| format!("não consegui ler {}: {e}", config.arquivo))?
+    };
+    let ps = palavras(&amp;texto);
+    println!("linhas: {}", texto.lines().count());
+    println!("palavras: {}", ps.len());
+    println!("caracteres: {}", texto.chars().count());
+    println!("mais frequentes:");
+    for (p, n) in ranking(&amp;ps, config.minimo).iter().take(config.top) {
+        println!("{n:&gt;4}  {p}");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn s(v: &amp;[&amp;str]) -&gt; Vec&lt;String&gt; {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn tira_pontuacao_e_maiusculas() {
+        assert_eq!(palavras("O rio, o MAR."), s(&amp;["o", "rio", "o", "mar"]));
+    }
+
+    #[test]
+    fn ranking_ordena_por_frequencia_e_nome() {
+        let r = ranking(&amp;s(&amp;["b", "a", "b", "c", "a", "b"]), 1);
+        assert_eq!(r[0], ("b".to_string(), 3));
+        assert_eq!(r[1], ("a".to_string(), 2));
+        assert_eq!(r[2], ("c".to_string(), 1));
+    }
+
+    #[test]
+    fn ranking_respeita_minimo() {
+        let r = ranking(&amp;s(&amp;["o", "rio", "o"]), 2);
+        assert_eq!(r, vec![("rio".to_string(), 1)]);
+    }
+
+    #[test]
+    fn config_sem_arquivo_da_erro() {
+        assert!(Config::new(&amp;s(&amp;["resumo"])).is_err());
+    }
+
+    #[test]
+    fn config_top_invalido() {
+        match Config::new(&amp;s(&amp;["resumo", "a.txt", "dez"])) {
+            Err(e) =&gt; assert!(e.contains("não é um número")),
+            Ok(_) =&gt; panic!("deveria dar erro"),
+        }
+    }
+}</pre>
+<pre class="file" data-file="src/main.rs">use std::{env, process};
+
+use resumo::Config;
+
+fn main() {
+    let args: Vec&lt;String&gt; = env::args().collect();
+    let config = Config::new(&amp;args).unwrap_or_else(|erro| {
+        eprintln!("erro: {erro}");
+        eprintln!("uso: resumo &lt;arquivo|-&gt; [quantas palavras]");
+        process::exit(1);
+    });
+    if let Err(e) = resumo::executar(config) {
+        eprintln!("erro: {e}");
+        process::exit(1);
+    }
+}</pre>
+<dl class="anatomy"><dt>//! ...</dt><dd>documentação do crate inteiro.</dd><dt>pub</dt><dd>só o que é <code>pub</code> pode ser usado pelo <code>main.rs</code>, que enxerga a biblioteca como um crate de fora, pelo nome <code>resumo</code>.</dd><dt>env::var("RESUMO_MIN")</dt><dd>lê uma variável de ambiente; se ela não existir, o tamanho mínimo de palavra é 1.</dd><dt>arquivo == "-"</dt><dd>convenção de terminal: <code>-</code> quer dizer “leia da entrada padrão”.</dd><dt>io::read_to_string(io::stdin())</dt><dd>lê toda a entrada padrão para uma <code>String</code>.</dd></dl>
+
+<hr>
+<h2>Passo 5: os testes</h2>
+<p>Os testes de unidade ficam no fim do <code>lib.rs</code> (já estão no arquivo acima, no módulo <code>tests</code>). O comentário <code>///</code> de <code>palavras</code> tem um exemplo de código: o <code>cargo test</code> também o compila e roda, é o <em>doc-test</em>. Por fim, um teste de integração em <code>tests/</code> roda o <strong>binário</strong> de verdade:</p>
+<pre class="file" data-file="tests/cli.rs">use std::process::Command;
+
+#[test]
+fn resume_o_poema() {
+    let saida = Command::new(env!("CARGO_BIN_EXE_resumo"))
+        .args(["poema.txt", "1"])
+        .output()
+        .unwrap();
+    assert!(saida.status.success());
+    let texto = String::from_utf8(saida.stdout).unwrap();
+    assert!(texto.contains("linhas: 9"));
+    assert!(texto.contains("   8  o"));
+}
+
+#[test]
+fn arquivo_inexistente_sai_com_erro() {
+    let saida = Command::new(env!("CARGO_BIN_EXE_resumo"))
+        .arg("nao-existe.txt")
+        .output()
+        .unwrap();
+    assert_eq!(saida.status.code(), Some(1));
+    let erro = String::from_utf8(saida.stderr).unwrap();
+    assert!(erro.contains("não consegui ler"));
+}</pre>
+<p><code>env!("CARGO_BIN_EXE_resumo")</code> é o caminho do executável que o cargo compilou para os testes. <code>Command</code> roda o programa como se fosse no terminal e captura saída e código de saída.</p>
+<pre class="term" data-cwd="~/projetos/resumo">$ cargo test -q
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 0.12s; merged doctests compilation took 0.11s</pre>
+<p>Com <code>-q</code>, cada teste que passa vira um ponto. São quatro blocos, nesta ordem: os 5 testes de unidade do <code>lib.rs</code>, o <code>main.rs</code> (sem testes), os 2 testes de integração de <code>tests/cli.rs</code> e o doc-test de <code>palavras</code>.</p>
+
+<hr>
+<h2>Passo 6: usando as novidades</h2>
+<pre class="term" data-cwd="~/projetos/resumo">$ cargo run -q -- poema.txt 3
+linhas: 9
+palavras: 49
+caracteres: 213
+mais frequentes:
+   8  o
+   3  a
+   3  chuva
+$ RESUMO_MIN=4 cargo run -q -- poema.txt 3
+linhas: 9
+palavras: 49
+caracteres: 213
+mais frequentes:
+   3  chuva
+   3  sobre
+   2  menino
+$ RESUMO_MIN=muito cargo run -q -- poema.txt
+erro: RESUMO_MIN inválido: 'muito'
+uso: resumo &lt;arquivo|-&gt; [quantas palavras]
+$ echo "o sol e o sal e o mar" | cargo run -q -- - 2
+linhas: 1
+palavras: 8
+caracteres: 22
+mais frequentes:
+   3  o
+   2  e</pre>
+<p><code>RESUMO_MIN=4 comando</code> define a variável só para aquele comando: palavras curtas como “o”, “a” e “e” deixam de entrar no ranking. Com <code>-</code>, o texto vem do <code>echo</code> pelo <code>|</code> (pipe), e o resumo passa a funcionar como qualquer ferramenta de terminal.</p>
+
+<hr>
+<h2>Passo 7: versão de release</h2>
+<p>O <code>cargo run</code> compila em modo <em>debug</em>: rápido de compilar, lento para rodar e cheio de checagens. Para entregar o programa, compile com otimizações:</p>
+<pre class="term" data-cwd="~/projetos/resumo">$ cargo build --release
+   Compiling resumo v0.1.0 (/home/ana/projetos/resumo)
+    Finished `release` profile [optimized] target(s) in 0.37s
+$ ls target/release/
+build
+examples
+incremental
+libresumo.d
+libresumo.rlib
+resumo
+resumo.d
+$ ./target/release/resumo poema.txt 2
+linhas: 9
+palavras: 49
+caracteres: 213
+mais frequentes:
+   8  o
+   3  a
+$ ./target/release/resumo
+erro: faltou o nome do arquivo
+uso: resumo &lt;arquivo|-&gt; [quantas palavras]</pre>
+<p>O executável <code>target/release/resumo</code> é um arquivo só, que roda sem o Rust instalado (em máquinas com o mesmo sistema). Para instalá-lo no seu <code>~/.cargo/bin</code> e chamá-lo de qualquer pasta como <code>resumo</code>, use <code>cargo install --path .</code>.</p>
+<div class="note"><strong>Para ir além</strong>: o crate <code>clap</code> gera parsing de argumentos com <code>--help</code> automático; <code>anyhow</code> simplifica o <code>Box&lt;dyn Error&gt;</code>. Adicione com <code>cargo add</code>, como na aula de <a href="crates.html">crates</a>.</div>
+
+<hr>
+<h2>Missões</h2>
+<div class="trycmd" data-goal="src:#\[test\];;outre:test result: ok\. [1-9]\d* passed;;semerro" data-cmd="cargo test">
+<p class="try-task"><strong>Missão:</strong> Escreva pelo menos um teste (<code>#[test]</code>) para <code>eh_par</code> no módulo <code>tests</code>, por exemplo conferindo que 4 é par e 7 não. Rode com <code>cargo test</code>: a saída deve ter <code>test result: ok.</code> com pelo menos 1 teste passando.</p>
+<pre class="script" data-file="src/main.rs">
+pub fn eh_par(n: i32) -&gt; bool {
+    n % 2 == 0
+}
+
+fn main() {
+    println!("{}", eh_par(10));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+pub fn eh_par(n: i32) -&gt; bool {
+    n % 2 == 0
+}
+
+fn main() {
+    println!("{}", eh_par(10));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quatro_e_par() {
+        assert!(eh_par(4));
+    }
+
+    #[test]
+    fn sete_nao_e_par() {
+        assert!(!eh_par(7));
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/main.rs (target/debug/build/missao/b798b7497cd66835/out/missao-b798b7497cd66835)
+
+running 2 tests
+test tests::quatro_e_par ... ok
+test tests::sete_nao_e_par ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+</pre>
+</div>
+<div class="trycmd" data-goal="src:env::var\(\x22SAUDACAO\x22\);;out:Olá, mundo;;semerro">
+<p class="try-task"><strong>Missão:</strong> Leia a saudação da variável de ambiente <code>SAUDACAO</code> com <code>env::var("SAUDACAO")</code>; se ela não existir, use <code>Olá</code>. Rodando sem a variável, a saída deve ser <code>Olá, mundo</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let saudacao = "Oi";
+    println!("{saudacao}, mundo");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::env;
+
+fn main() {
+    let saudacao = env::var("SAUDACAO").unwrap_or_else(|_| "Olá".to_string());
+    println!("{saudacao}, mundo");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+Olá, mundo
+</pre>
+</div>
+<div class="trycmd" data-goal="src:Box&lt;dyn\s+Error&gt;;;out:dobro: 42;;out:erro: invalid digit found in string">
+<p class="try-task"><strong>Missão:</strong> Complete <code>dobro_de</code>: ela deve converter o texto com <code>parse::&lt;i32&gt;()?</code> e devolver o dobro, com retorno <code>Result&lt;i32, Box&lt;dyn Error&gt;&gt;</code>. A saída deve ter <code>dobro: 42</code> e <code>erro: invalid digit found in string</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::error::Error;
+
+fn dobro_de(texto: &amp;str) -&gt; i32 {
+    texto.len() as i32
+}
+
+fn main() {
+    for entrada in ["21", "vinte"] {
+        println!("dobro: {}", dobro_de(entrada));
+    }
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::error::Error;
+
+fn dobro_de(texto: &amp;str) -&gt; Result&lt;i32, Box&lt;dyn Error&gt;&gt; {
+    let n = texto.parse::&lt;i32&gt;()?;
+    Ok(n * 2)
+}
+
+fn main() {
+    for entrada in ["21", "vinte"] {
+        match dobro_de(entrada) {
+            Ok(d) =&gt; println!("dobro: {d}"),
+            Err(e) =&gt; println!("erro: {e}"),
+        }
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+dobro: 42
+erro: invalid digit found in string
+</pre>
+</div>
+
+<hr>
+<h2>Parabéns!</h2>
+<p>Você terminou o Guia Rust. Do <code>cargo new</code> ao projeto com biblioteca, testes e release, passando por ownership, traits, generics, lifetimes, concorrência e <code>unsafe</code>. Próximos passos sugeridos:</p>
+<ul>
+<li>Leia <a href="https://doc.rust-lang.org/book/" target="_blank" rel="noopener">The Rust Programming Language</a> (o “livro”), a referência oficial e gratuita.</li>
+<li>Pratique com os exercícios do <a href="https://github.com/rust-lang/rustlings" target="_blank" rel="noopener">Rustlings</a>.</li>
+<li>Reescreva em Rust uma ferramenta pequena que você já usa, e publique no GitHub.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

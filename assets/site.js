@@ -78,7 +78,8 @@ var NIVEIS = [
       ["traits-std.html", "Traits da biblioteca padrão"]
     ]},
     { grupo: "Projeto Final", itens: [
-      ["projeto-cli.html", "Projeto final: CLI (parte 1)"]
+      ["projeto-cli.html", "Projeto final: CLI (parte 1)"],
+      ["projeto-cli-2.html", "Projeto final: CLI (parte 2)"]
     ]}
   ]}
 ];
