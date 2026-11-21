@@ -71,6 +71,10 @@ var NIVEIS = [
       ["canais.html", "Canais (mpsc)"],
       ["arc-mutex.html", "Arc e Mutex"],
       ["async.html", "async/await básico"]
+    ]},
+    { grupo: "Rust Avançado", itens: [
+      ["macros.html", "Macros declarativas"],
+      ["unsafe.html", "unsafe básico"]
     ]}
   ]}
 ];

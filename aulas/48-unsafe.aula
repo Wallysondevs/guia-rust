@@ -1,0 +1,197 @@
+---
+slug: unsafe
+menu: unsafe básico
+titulo: unsafe em Rust — ponteiros crus, funções unsafe e abstrações seguras | Guia Rust
+desc: O que o bloco unsafe libera em Rust: ponteiros crus *const e *mut, funções unsafe, chamar funções de C com extern, variáveis static mut, o erro E0133, e como embrulhar código unsafe numa API segura com split_at_mut.
+h1: <span class="hl">unsafe</span> básico
+nivel: n3
+grupo: Rust Avançado
+---
+<p class="intro">O compilador do Rust é conservador: prefere recusar um programa correto a aceitar um perigoso. Às vezes, porém, você <strong>sabe</strong> algo que ele não consegue provar, ou precisa conversar com o hardware ou com código em C. Para isso existe <code>unsafe</code>: um bloco em que você assume a responsabilidade por algumas regras.</p>
+<div class="note warn"><strong>unsafe não desliga o borrow checker.</strong> Ele libera só cinco “superpoderes”: (1) desreferenciar ponteiros crus; (2) chamar funções <code>unsafe</code> (incluindo funções de C); (3) ler e escrever <code>static mut</code>; (4) implementar traits <code>unsafe</code>; (5) acessar campos de <code>union</code>. Todo o resto continua checado.</div>
+
+<hr>
+<h2>1. Ponteiros crus</h2>
+::: exemplo ponteiros
+fn main() {
+    let mut numero = 10;
+
+    let r1 = &raw const numero;
+    let r2 = &raw mut numero;
+
+    unsafe {
+        *r2 += 5;
+        println!("r1 aponta para {}", *r1);
+    }
+    println!("numero = {numero}");
+}
+:::
+<p><code>&amp;raw const</code> e <code>&amp;raw mut</code> criam ponteiros crus (<code>*const i32</code> e <code>*mut i32</code>). Criar é seguro; <strong>usar</strong> (<code>*r1</code>) exige <code>unsafe</code>, porque o compilador não garante que o ponteiro é válido. Repare que aqui temos um ponteiro de leitura e um de escrita ao mesmo tempo, algo que referências normais nunca permitiriam.</p>
+::: exemplo sem-unsafe falha
+fn main() {
+    let numero = 10;
+    let p = &raw const numero;
+    println!("{}", *p);
+}
+:::
+
+<hr>
+<h2>2. Funções unsafe</h2>
+::: exemplo funcao-unsafe
+/// Devolve o elemento sem checar o índice.
+///
+/// # Safety
+/// `i` precisa ser menor que `v.len()`.
+unsafe fn pegar_sem_checar(v: &[i32], i: usize) -> i32 {
+    unsafe { *v.as_ptr().add(i) }
+}
+
+fn main() {
+    let dados = [10, 20, 30];
+    let x = unsafe { pegar_sem_checar(&dados, 2) };
+    println!("x = {x}");
+    let y = unsafe { dados.get_unchecked(0) };
+    println!("y = {y}");
+}
+:::
+<p>Uma <code>unsafe fn</code> tem regras que quem chama precisa cumprir; por convenção, elas ficam documentadas na seção <code>/// # Safety</code>. A biblioteca padrão tem várias, como <code>get_unchecked</code>, que pula a checagem de limites.</p>
+
+<hr>
+<h2>3. Abstração segura: split_at_mut</h2>
+<p>O uso mais importante de <code>unsafe</code> é construir funções <strong>seguras</strong> por fora. Exemplo clássico: dividir um slice mutável em duas metades. Com referências normais o borrow checker recusa, porque vê dois empréstimos mutáveis do mesmo slice:</p>
+::: exemplo dividir-seguro falha
+fn dividir(v: &mut [i32], meio: usize) -> (&mut [i32], &mut [i32]) {
+    (&mut v[..meio], &mut v[meio..])
+}
+
+fn main() {
+    let mut v = [1, 2, 3, 4];
+    let (a, b) = dividir(&mut v, 2);
+    println!("{:?} {:?}", a, b);
+}
+:::
+<p>Nós sabemos que as duas partes não se sobrepõem. Com ponteiros crus, dá para dizer isso ao compilador:</p>
+::: exemplo dividir-unsafe
+use std::slice;
+
+fn dividir(v: &mut [i32], meio: usize) -> (&mut [i32], &mut [i32]) {
+    let tamanho = v.len();
+    assert!(meio <= tamanho);
+    let p = v.as_mut_ptr();
+    unsafe {
+        (
+            slice::from_raw_parts_mut(p, meio),
+            slice::from_raw_parts_mut(p.add(meio), tamanho - meio),
+        )
+    }
+}
+
+fn main() {
+    let mut v = [1, 2, 3, 4, 5];
+    let (a, b) = dividir(&mut v, 2);
+    a[0] = 100;
+    b[0] = 300;
+    println!("{:?}", v);
+}
+:::
+<p>A função <code>dividir</code> é segura para quem chama: o <code>assert!</code> garante a regra de que o <code>unsafe</code> precisa. É assim que a própria <code>split_at_mut</code> da biblioteca padrão é implementada.</p>
+
+<hr>
+<h2>4. Chamando C e static mut</h2>
+::: exemplo extern-c
+unsafe extern "C" {
+    safe fn abs(x: i32) -> i32;
+    fn strlen(s: *const std::ffi::c_char) -> usize;
+}
+
+static mut CONTADOR: u32 = 0;
+
+fn contar() {
+    unsafe {
+        CONTADOR += 1;
+    }
+}
+
+fn main() {
+    println!("abs(-7) = {}", abs(-7));
+    let texto = c"olá";
+    let n = unsafe { strlen(texto.as_ptr()) };
+    println!("strlen = {n} bytes");
+
+    contar();
+    contar();
+    let total = unsafe { CONTADOR };
+    println!("CONTADOR = {total}");
+}
+:::
+<p>O bloco <code>extern "C"</code> declara funções da biblioteca C. Funções marcadas <code>safe</code> podem ser chamadas sem <code>unsafe</code>; as outras não. <code>c"olá"</code> é uma string de C (terminada em zero); <code>strlen</code> conta 4 bytes porque <code>á</code> ocupa 2 em UTF-8. Já <code>static mut</code> é uma variável global modificável: qualquer acesso é <code>unsafe</code>, porque duas threads poderiam mexer nela ao mesmo tempo. Na prática, prefira um atômico ou um <code>Mutex</code>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para ler o valor de um ponteiro cru:
+let v = [[unsafe]] { *p };
+:::
+::: ex
+Complete o tipo de um ponteiro cru de escrita para <code>i32</code>:
+let p: [[*mut]] i32 = &raw mut x;
+:::
+::: mc 2
+Qual destas coisas o <code>unsafe</code> <strong>não</strong> faz?
+- permitir desreferenciar ponteiros crus
+- desligar o borrow checker para referências normais
+- permitir chamar funções <code>unsafe</code>
+- permitir modificar um <code>static mut</code>
+:::
+::: mc 4
+Qual é a boa prática ao usar <code>unsafe</code>?
+- usar em todo o programa para ganhar velocidade
+- evitar comentários para não confundir
+- trocar todas as referências por ponteiros crus
+- deixar o bloco pequeno e embrulhá-lo numa função segura, documentando as regras
+:::
+::: missao goal="src:unsafe\s*\{;;out:valor = 42;;semerro"
+O código não compila (E0133): desreferenciar um ponteiro cru exige um bloco <code>unsafe</code>. Conserte para imprimir <code>valor = 42</code>.
+--- script
+fn main() {
+    let mut x = 41;
+    let p = &raw mut x;
+    *p += 1;
+    println!("valor = {x}");
+}
+--- solucao
+fn main() {
+    let mut x = 41;
+    let p = &raw mut x;
+    unsafe {
+        *p += 1;
+    }
+    println!("valor = {x}");
+}
+:::
+::: missao goal="src:from_raw_parts;;out:[3, 4, 5];;semerro"
+Use <code>std::slice::from_raw_parts</code> com o ponteiro <code>p</code> deslocado (<code>p.add(2)</code>) para montar um slice com os 3 últimos elementos e imprimi-lo: <code>[3, 4, 5]</code>.
+--- script
+fn main() {
+    let dados = [1, 2, 3, 4, 5];
+    let p = dados.as_ptr();
+    let _ = p;
+    println!("{:?}", &dados[..]);
+}
+--- solucao
+fn main() {
+    let dados = [1, 2, 3, 4, 5];
+    let p = dados.as_ptr();
+    let fim = unsafe { std::slice::from_raw_parts(p.add(2), 3) };
+    println!("{:?}", fim);
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>unsafe</code> libera cinco operações; o resto das regras continua valendo.</li>
+<li>Ponteiros crus (<code>*const</code>, <code>*mut</code>) podem ser criados livremente, mas só desreferenciados em <code>unsafe</code>.</li>
+<li><code>unsafe fn</code> tem regras para quem chama; documente-as em <code>/// # Safety</code>.</li>
+<li>Bom <code>unsafe</code> é pequeno e escondido atrás de uma API segura.</li>
+</ul>

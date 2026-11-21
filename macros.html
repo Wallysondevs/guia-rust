@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Macros declarativas em Rust — macro_rules!, fragmentos e repetições | Guia Rust</title>
+<meta name="description" content="Como escrever macros em Rust com macro_rules!: padrões e braços, fragmentos expr, ident, ty e tt, repetições $(...),*, macros recursivas, erros de macro, cargo expand e quando preferir uma função.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Macros <span class="hl">declarativas</span></h1>
+
+<p class="intro">Você usa macros desde a primeira aula: <code>println!</code>, <code>vec!</code>, <code>assert_eq!</code>. Uma macro é código que <strong>escreve código</strong>: antes de compilar, o Rust troca a chamada pelo código que ela gera. Com <code>macro_rules!</code> você cria as suas, usando casamento de padrões parecido com o <code>match</code>.</p>
+<div class="note"><strong>Macro × função</strong>: uma macro recebe um número variável de argumentos, pode aceitar tipos e nomes (não só valores) e gera código na compilação. Mas é mais difícil de ler e de depurar. Se uma função resolve, prefira a função.</div>
+
+<hr>
+<h2>1. A primeira macro</h2>
+<pre class="file" data-file="src/main.rs">macro_rules! ola {
+    () =&gt; {
+        println!("olá, macro!");
+    };
+    ($nome:expr) =&gt; {
+        println!("olá, {}!", $nome);
+    };
+}
+
+fn main() {
+    ola!();
+    ola!("Ana");
+    ola!(String::from("Bia") + " e Caio");
+}</pre>
+<pre class="term" data-cwd="~/projetos/primeira">$ cargo run
+   Compiling primeira v0.1.0 (/home/ana/projetos/primeira)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/primeira`
+olá, macro!
+olá, Ana!
+olá, Bia e Caio!</pre>
+<dl class="anatomy"><dt>macro_rules! ola</dt><dd>define a macro <code>ola!</code>.</dd><dt>( padrão ) =&gt; { código }</dt><dd>cada braço tem um padrão e o código gerado; o primeiro que casar é usado.</dd><dt>$nome:expr</dt><dd>captura uma <strong>expressão</strong> com o nome <code>$nome</code>.</dd></dl>
+
+<hr>
+<h2>2. Tipos de fragmento</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Fragmento</th><th>Casa com</th><th>Exemplo</th></tr>
+<tr><td><code>expr</code></td><td>uma expressão</td><td><code>2 + x</code>, <code>f(1)</code></td></tr>
+<tr><td><code>ident</code></td><td>um nome</td><td><code>contador</code>, <code>Ponto</code></td></tr>
+<tr><td><code>ty</code></td><td>um tipo</td><td><code>i32</code>, <code>Vec&lt;String&gt;</code></td></tr>
+<tr><td><code>literal</code></td><td>um literal</td><td><code>42</code>, <code>"oi"</code></td></tr>
+<tr><td><code>pat</code></td><td>um padrão</td><td><code>Some(x)</code>, <code>1..=5</code></td></tr>
+<tr><td><code>block</code></td><td>um bloco</td><td><code>{ ... }</code></td></tr>
+<tr><td><code>tt</code></td><td>um token qualquer</td><td><code>+</code>, <code>foo</code>, <code>(a b)</code></td></tr>
+</table></div>
+<pre class="file" data-file="src/main.rs">macro_rules! campo_com_getter {
+    ($struct_nome:ident, $campo:ident : $tipo:ty) =&gt; {
+        struct $struct_nome {
+            $campo: $tipo,
+        }
+
+        impl $struct_nome {
+            fn $campo(&amp;self) -&gt; &amp;$tipo {
+                &amp;self.$campo
+            }
+        }
+    };
+}
+
+campo_com_getter!(Usuario, nome: String);
+campo_com_getter!(Sensor, leitura: f64);
+
+fn main() {
+    let u = Usuario { nome: String::from("ana") };
+    let s = Sensor { leitura: 23.5 };
+    println!("{} / {}", u.nome(), s.leitura());
+}</pre>
+<pre class="term" data-cwd="~/projetos/ident-ty">$ cargo run
+   Compiling ident-ty v0.1.0 (/home/ana/projetos/ident-ty)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/ident-ty`
+ana / 23.5</pre>
+<p>A macro criou duas structs inteiras, com método, a partir de nomes e tipos. Isso uma função não consegue fazer.</p>
+
+<hr>
+<h2>3. Repetições</h2>
+<p><code>$( ... ),*</code> casa “zero ou mais itens separados por vírgula”; <code>+</code> no lugar de <code>*</code> exige pelo menos um. No código gerado, <code>$( ... )*</code> repete a parte de dentro uma vez para cada item.</p>
+<pre class="file" data-file="src/main.rs">macro_rules! meu_vec {
+    ( $( $x:expr ),* $(,)? ) =&gt; {
+        {
+            let mut v = Vec::new();
+            $(
+                v.push($x);
+            )*
+            v
+        }
+    };
+}
+
+macro_rules! maximo {
+    ($x:expr) =&gt; { $x };
+    ($x:expr, $($resto:expr),+) =&gt; {
+        {
+            let a = $x;
+            let b = maximo!($($resto),+);
+            if a &gt; b { a } else { b }
+        }
+    };
+}
+
+fn main() {
+    let v: Vec&lt;i32&gt; = meu_vec![1, 2, 3,];
+    println!("{:?}", v);
+    let vazio: Vec&lt;i32&gt; = meu_vec![];
+    println!("{:?}", vazio);
+    println!("máximo: {}", maximo!(4, 19, 7, 12));
+}</pre>
+<pre class="term" data-cwd="~/projetos/repeticao">$ cargo run
+   Compiling repeticao v0.1.0 (/home/ana/projetos/repeticao)
+warning: variable does not need to be mutable
+  --&gt; src/main.rs:4:17
+   |
+ 1 | macro_rules! meu_vec {
+...
+ 4 |             let mut v = Vec::new();
+   |                 ----^
+   |                 |
+   |                 help: remove this `mut`
+...
+27 |     let vazio: Vec&lt;i32&gt; = meu_vec![];
+   |                           ---------- in this macro invocation
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `repeticao` (bin "repeticao") generated 1 warning (run `cargo fix --bin "repeticao" -p repeticao` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/repeticao`
+[1, 2, 3]
+[]
+máximo: 19</pre>
+<p>Repare no aviso: ele aponta para dentro da macro, mas o culpado é a chamada <code>meu_vec![]</code>. Sem itens, o código gerado não tem nenhum <code>push</code>, e o <code>mut</code> fica sobrando. Macros geram código diferente para cada chamada, e os avisos valem para cada versão. <code>$(,)?</code> aceita uma vírgula opcional no fim. <code>maximo!</code> é <strong>recursiva</strong>: chama a si mesma com o resto da lista até sobrar um item.</p>
+
+<hr>
+<h2>4. Um mini-HashMap literal</h2>
+<pre class="file" data-file="src/main.rs">use std::collections::HashMap;
+
+macro_rules! mapa {
+    ( $( $chave:expr =&gt; $valor:expr ),* $(,)? ) =&gt; {{
+        let mut m = HashMap::new();
+        $( m.insert($chave, $valor); )*
+        m
+    }};
+}
+
+fn main() {
+    let capitais = mapa! {
+        "SP" =&gt; "São Paulo",
+        "RJ" =&gt; "Rio de Janeiro",
+        "MG" =&gt; "Belo Horizonte",
+    };
+    let mut siglas: Vec&lt;_&gt; = capitais.keys().collect();
+    siglas.sort();
+    for s in siglas {
+        println!("{s}: {}", capitais[s]);
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/mapa">$ cargo run
+   Compiling mapa v0.1.0 (/home/ana/projetos/mapa)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/mapa`
+MG: Belo Horizonte
+RJ: Rio de Janeiro
+SP: São Paulo</pre>
+
+<hr>
+<h2>5. Quando nenhum braço casa</h2>
+<pre class="file" data-file="src/main.rs">macro_rules! dobro {
+    ($x:expr) =&gt; {
+        $x * 2
+    };
+}
+
+fn main() {
+    println!("{}", dobro!(1, 2));
+}</pre>
+<pre class="term" data-cwd="~/projetos/sem-braco">$ cargo run
+   Compiling sem-braco v0.1.0 (/home/ana/projetos/sem-braco)
+error: no rules expected `,`
+ --&gt; src/main.rs:8:28
+  |
+1 | macro_rules! dobro {
+  | ------------------ when calling this macro
+...
+8 |     println!("{}", dobro!(1, 2));
+  |                            ^ no rules expected this token in macro call
+  |
+note: while trying to match meta-variable `$x:expr`
+ --&gt; src/main.rs:2:6
+  |
+2 |     ($x:expr) =&gt; {
+  |      ^^^^^^^
+
+error: could not compile `sem-braco` (bin "sem-braco") due to 1 previous error</pre>
+<p>O erro diz qual token sobrou (<code>,</code>) e mostra a definição da macro. Para ver o código que uma macro gera, existe a ferramenta <code>cargo expand</code> (instalada com <code>cargo install cargo-expand</code>).</p>
+
+<h3>Higiene</h3>
+<pre class="file" data-file="src/main.rs">macro_rules! cria_x {
+    () =&gt; {
+        let x = 100;
+        println!("x dentro da macro: {x}");
+    };
+}
+
+fn main() {
+    let x = 1;
+    cria_x!();
+    println!("x no main: {x}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/higiene">$ cargo run
+   Compiling higiene v0.1.0 (/home/ana/projetos/higiene)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/higiene`
+x dentro da macro: 100
+x no main: 1</pre>
+<p>As variáveis criadas dentro de uma macro não “vazam” nem atropelam as de quem a chama: as macros do Rust são <strong>higiênicas</strong>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para definir uma macro:</p><div class="ex-code"><input data-answer="macro_rules!" aria-label="resposta"> diga_oi { () =&gt; { println!("oi") }; }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o fragmento que captura uma expressão:</p><div class="ex-code">($valor:<input data-answer="expr" aria-label="resposta">) =&gt; { ... }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para repetir zero ou mais expressões separadas por vírgula:</p><div class="ex-code">( $( $x:expr ),<input data-answer="*" aria-label="resposta"> ) =&gt; { ... }</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Qual fragmento usar para receber um <strong>nome</strong> de função ou de struct?</p>
+<label><input type="radio" name="q1"> <code>expr</code></label>
+<label><input type="radio" name="q1"> <code>ty</code></label>
+<label><input type="radio" name="q1"> <code>ident</code></label>
+<label><input type="radio" name="q1"> <code>literal</code></label></div>
+<div class="trycmd" data-goal="src:macro_rules!\s*quadrado;;out:quadrado de 7 = 49;;semerro">
+<p class="try-task"><strong>Missão:</strong> Crie a macro <code>quadrado!</code> que recebe uma expressão e devolve ela vezes ela mesma, para imprimir <code>quadrado de 7 = 49</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let n = 7;
+    println!("quadrado de {n} = {}", n);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+macro_rules! quadrado {
+    ($x:expr) =&gt; {
+        $x * $x
+    };
+}
+
+fn main() {
+    let n = 7;
+    println!("quadrado de {n} = {}", quadrado!(n));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+quadrado de 7 = 49
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\$\(;;out:soma = 15;;out:soma = 0;;semerro">
+<p class="try-task"><strong>Missão:</strong> Crie a macro <code>soma!</code> que aceita qualquer quantidade de números (inclusive nenhum) usando repetição <code>$( ... ),*</code>. A saída deve ter <code>soma = 15</code> e <code>soma = 0</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("soma = {}", 0);
+    println!("soma = {}", 0);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+macro_rules! soma {
+    ( $( $x:expr ),* ) =&gt; {
+        0 $( + $x )*
+    };
+}
+
+fn main() {
+    println!("soma = {}", soma!(1, 2, 3, 4, 5));
+    println!("soma = {}", soma!());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+soma = 15
+soma = 0
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>macro_rules!</code> define macros com braços <code>(padrão) =&gt; { código }</code>.</li>
+<li>Fragmentos como <code>expr</code>, <code>ident</code>, <code>ty</code> e <code>tt</code> dizem o que cada <code>$nome</code> captura.</li>
+<li><code>$( ... ),*</code> e <code>$( ... ),+</code> tratam listas; macros podem ser recursivas.</li>
+<li>Macros são higiênicas; prefira funções quando elas bastarem.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
