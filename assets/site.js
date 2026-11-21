@@ -25,6 +25,10 @@ var NIVEIS = [
       ["ownership.html", "Ownership (posse)"],
       ["borrowing.html", "Borrowing (referências)"],
       ["slices.html", "Slices (&str e &[T])"]
+    ]},
+    { grupo: "Structs e Enums", itens: [
+      ["structs.html", "Structs"],
+      ["metodos.html", "Métodos e impl"]
     ]}
   ]}
 ];

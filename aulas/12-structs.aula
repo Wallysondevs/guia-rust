@@ -1,0 +1,236 @@
+---
+slug: structs
+menu: Structs
+titulo: Structs em Rust — campos, criação, atualização, tuple structs e #[derive(Debug)] | Guia Rust
+desc: Como criar e usar structs em Rust: definir campos, criar instâncias, atalho de inicialização, sintaxe de atualização com .., structs de tupla, unit structs e como imprimir com #[derive(Debug)].
+h1: <span class="hl">Structs</span>
+nivel: n1
+grupo: Structs e Enums
+---
+<p class="intro">Uma <strong>struct</strong> (estrutura) junta vários valores relacionados sob um nome, cada um com o seu rótulo. É como uma ficha de cadastro: nome, e-mail, idade. Diferente da tupla, cada campo tem nome, então o código fica muito mais legível.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A definir uma struct, criar instâncias e ler e mudar campos.</li>
+<li>Os atalhos de inicialização e de atualização (<code>..outra</code>).</li>
+<li>Structs de tupla, unit structs e o <code>#[derive(Debug)]</code> para imprimir.</li>
+</ul></div>
+
+<hr>
+<h2>1. Definindo e criando</h2>
+::: exemplo struct
+struct Usuario {
+    nome: String,
+    email: String,
+    idade: u32,
+    ativo: bool,
+}
+
+fn main() {
+    let mut ana = Usuario {
+        nome: String::from("Ana"),
+        email: String::from("ana@exemplo.com"),
+        idade: 28,
+        ativo: true,
+    };
+    ana.idade += 1;
+    println!("{} <{}>, {} anos, ativo: {}", ana.nome, ana.email, ana.idade, ana.ativo);
+}
+:::
+<p>Para mudar um campo, a instância inteira precisa ser <code>mut</code>: o Rust não deixa marcar só alguns campos como mutáveis. Nomes de struct usam <em>CamelCase</em> (<code>Usuario</code>, <code>PedidoDeCompra</code>).</p>
+
+<hr>
+<h2>2. Imprimindo: <code>#[derive(Debug)]</code></h2>
+<p>Tente imprimir a struct inteira com <code>{:?}</code> sem preparar nada:</p>
+::: exemplo sem-debug falha
+struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Ponto { x: 1, y: 2 };
+    println!("{:?}", p);
+}
+:::
+<p>O <code>{:?}</code> exige o trait <code>Debug</code>. O <code>help</code> e a <code>note</code> dizem a correção: colocar <code>#[derive(Debug)]</code> acima da struct, que gera o código de impressão automaticamente.</p>
+::: exemplo com-debug
+#[derive(Debug)]
+struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Ponto { x: 1, y: 2 };
+    println!("{:?}", p);
+    println!("{:#?}", p);
+    dbg!(&p);
+}
+:::
+<p>O <code>dbg!</code> imprime na saída de erro o arquivo, a linha, a expressão e o valor. É ótimo para depurar.</p>
+<p>Repare no <code>warning</code> do começo: os campos <code>x</code> e <code>y</code> “nunca são lidos”. O compilador avisa sobre código morto (<em>dead code</em>) e, de propósito, não conta a leitura que o <code>Debug</code> faz (a <code>note</code> explica isso). Num programa de verdade, os campos são usados em algum lugar e o aviso some, como nos próximos exemplos.</p>
+
+<hr>
+<h2>3. Atalhos: inicialização e atualização</h2>
+::: exemplo atalhos
+#[derive(Debug)]
+struct Config {
+    tema: String,
+    fonte: u32,
+    som: bool,
+}
+
+fn criar(tema: String, fonte: u32) -> Config {
+    Config { tema, fonte, som: true }
+}
+
+fn main() {
+    let padrao = criar(String::from("claro"), 14);
+    let escuro = Config {
+        tema: String::from("escuro"),
+        ..padrao
+    };
+    println!("{:?}", escuro);
+    println!("tema {} | fonte {} | som {}", escuro.tema, escuro.fonte, escuro.som);
+}
+:::
+<p>Quando a variável tem o mesmo nome do campo, basta escrever <code>tema</code> em vez de <code>tema: tema</code>. O <code>..padrao</code> preenche os campos que faltam com os de outra instância. Atenção: se um campo copiado for uma <code>String</code>, ele é <strong>movido</strong>, e a instância antiga perde aquele campo.</p>
+
+<hr>
+<h2>4. Structs de tupla e unit structs</h2>
+::: exemplo tuple-struct
+#[derive(Debug)]
+struct Cor(u8, u8, u8);
+#[derive(Debug)]
+struct Metros(f64);
+#[derive(Debug)]
+struct Marcador;
+
+fn main() {
+    let laranja = Cor(255, 140, 0);
+    let distancia = Metros(42.5);
+    println!("{:?} vermelho={} verde={} azul={}", laranja, laranja.0, laranja.1, laranja.2);
+    println!("{:?} = {} m", distancia, distancia.0);
+    println!("{:?}", Marcador);
+}
+:::
+<p>Structs de tupla têm campos sem nome (<code>.0</code>, <code>.1</code>). São úteis para dar um tipo próprio a um valor: <code>Metros(42.5)</code> não pode ser confundido com um <code>f64</code> qualquer. A <em>unit struct</em> (<code>Marcador</code>) não tem campos e aparece com traits, mais adiante.</p>
+
+<hr>
+<h2>5. Quando dá errado: esquecer um campo</h2>
+::: exemplo campo-faltando falha
+struct Produto {
+    nome: String,
+    preco: f64,
+    estoque: u32,
+}
+
+fn main() {
+    let p = Produto {
+        nome: String::from("caneta"),
+        preco: 2.5,
+    };
+    println!("{}", p.nome);
+}
+:::
+<p>Erro <strong>E0063</strong>: todo campo precisa de valor. Em Rust não existe campo “nulo” por esquecimento.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o atributo que permite imprimir com <code>{:?}</code>:
+#[derive([[Debug]])]
+struct Livro { titulo: String }
+:::
+::: ex
+Complete para copiar os demais campos de <code>base</code>:
+let b = Config { fonte: 18, [[..base]] };
+:::
+::: mc 2
+Como acessar o segundo campo de <code>struct Cor(u8, u8, u8)</code>?
+- <code>cor[1]</code>
+- <code>cor.1</code>
+- <code>cor.segundo</code>
+- <code>cor(1)</code>
+:::
+::: mc 3
+Para mudar <code>usuario.idade</code>, o que precisa ser <code>mut</code>?
+- Só o campo <code>idade</code> na definição
+- Nada
+- A variável <code>usuario</code> inteira
+- A struct, com <code>mut struct</code>
+:::
+::: missao goal="src:struct\s+Livro;;src:titulo\s*:;;out:Dom Casmurro, de Machado de Assis (1899)"
+Crie a struct <code>Livro</code> com os campos <code>titulo</code>, <code>autor</code> (<code>String</code>) e <code>ano</code> (<code>u32</code>). Crie um livro e imprima <code>Dom Casmurro, de Machado de Assis (1899)</code> lendo os campos.
+--- script
+fn main() {
+    println!("Dom Casmurro, de Machado de Assis (1899)");
+}
+--- solucao
+struct Livro {
+    titulo: String,
+    autor: String,
+    ano: u32,
+}
+
+fn main() {
+    let l = Livro {
+        titulo: String::from("Dom Casmurro"),
+        autor: String::from("Machado de Assis"),
+        ano: 1899,
+    };
+    println!("{}, de {} ({})", l.titulo, l.autor, l.ano);
+}
+:::
+::: missao goal="src:#\[derive\(Debug\)\];;out:Ponto3D { x: 1, y: 2, z: 3 }"
+O programa abaixo não compila porque <code>Ponto3D</code> não implementa <code>Debug</code>. Conserte-o para imprimir <code>Ponto3D { x: 1, y: 2, z: 3 }</code>.
+--- script
+struct Ponto3D {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+fn main() {
+    let p = Ponto3D { x: 1, y: 2, z: 3 };
+    println!("{:?}", p);
+}
+--- solucao
+#[derive(Debug)]
+struct Ponto3D {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+fn main() {
+    let p = Ponto3D { x: 1, y: 2, z: 3 };
+    println!("{:?}", p);
+}
+:::
+::: missao goal="src:struct\s+Celsius\s*\(\s*f64\s*\);;out:25 °C = 77 °F"
+Crie a struct de tupla <code>Celsius(f64)</code> e uma função <code>fn para_fahrenheit(c: Celsius) -&gt; f64</code> (F = C × 9 / 5 + 32). Imprima <code>25 °C = 77 °F</code>.
+--- script
+fn main() {
+}
+--- solucao
+struct Celsius(f64);
+
+fn para_fahrenheit(c: Celsius) -> f64 {
+    c.0 * 9.0 / 5.0 + 32.0
+}
+
+fn main() {
+    let t = Celsius(25.0);
+    let c = t.0;
+    println!("{} °C = {} °F", c, para_fahrenheit(t));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>struct Nome { campo: Tipo, … }</code>; crie com <code>Nome { campo: valor, … }</code>.</li>
+<li>Todo campo precisa de valor (E0063); para mudar campos, a instância é <code>mut</code>.</li>
+<li><code>#[derive(Debug)]</code> libera <code>{:?}</code>, <code>{:#?}</code> e <code>dbg!</code>.</li>
+<li>Atalhos: <code>Nome { campo }</code> e <code>..outra</code>; structs de tupla: <code>struct Cor(u8, u8, u8)</code>.</li>
+</ul>

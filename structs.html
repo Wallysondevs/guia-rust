@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Structs em Rust — campos, criação, atualização, tuple structs e #[derive(Debug)] | Guia Rust</title>
+<meta name="description" content="Como criar e usar structs em Rust: definir campos, criar instâncias, atalho de inicialização, sintaxe de atualização com .., structs de tupla, unit structs e como imprimir com #[derive(Debug)].">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Structs</span></h1>
+
+<p class="intro">Uma <strong>struct</strong> (estrutura) junta vários valores relacionados sob um nome, cada um com o seu rótulo. É como uma ficha de cadastro: nome, e-mail, idade. Diferente da tupla, cada campo tem nome, então o código fica muito mais legível.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A definir uma struct, criar instâncias e ler e mudar campos.</li>
+<li>Os atalhos de inicialização e de atualização (<code>..outra</code>).</li>
+<li>Structs de tupla, unit structs e o <code>#[derive(Debug)]</code> para imprimir.</li>
+</ul></div>
+
+<hr>
+<h2>1. Definindo e criando</h2>
+<pre class="file" data-file="src/main.rs">struct Usuario {
+    nome: String,
+    email: String,
+    idade: u32,
+    ativo: bool,
+}
+
+fn main() {
+    let mut ana = Usuario {
+        nome: String::from("Ana"),
+        email: String::from("ana@exemplo.com"),
+        idade: 28,
+        ativo: true,
+    };
+    ana.idade += 1;
+    println!("{} &lt;{}&gt;, {} anos, ativo: {}", ana.nome, ana.email, ana.idade, ana.ativo);
+}</pre>
+<pre class="term" data-cwd="~/projetos/struct">$ cargo run
+   Compiling struct v0.1.0 (/home/ana/projetos/struct)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/struct`
+Ana &lt;ana@exemplo.com&gt;, 29 anos, ativo: true</pre>
+<p>Para mudar um campo, a instância inteira precisa ser <code>mut</code>: o Rust não deixa marcar só alguns campos como mutáveis. Nomes de struct usam <em>CamelCase</em> (<code>Usuario</code>, <code>PedidoDeCompra</code>).</p>
+
+<hr>
+<h2>2. Imprimindo: <code>#[derive(Debug)]</code></h2>
+<p>Tente imprimir a struct inteira com <code>{:?}</code> sem preparar nada:</p>
+<pre class="file" data-file="src/main.rs">struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Ponto { x: 1, y: 2 };
+    println!("{:?}", p);
+}</pre>
+<pre class="term" data-cwd="~/projetos/sem-debug">$ cargo run
+   Compiling sem-debug v0.1.0 (/home/ana/projetos/sem-debug)
+error[E0277]: `Ponto` doesn't implement `Debug`
+ --&gt; src/main.rs:8:22
+  |
+8 |     println!("{:?}", p);
+  |               ----   ^ `Ponto` cannot be formatted using `{:?}` because it doesn't implement `Debug`
+  |               |
+  |               required by this formatting parameter
+  |
+  = help: the trait `Debug` is not implemented for `Ponto`
+help: consider annotating `Ponto` with `#[derive(Debug)]`
+  |
+1 + #[derive(Debug)]
+2 | struct Ponto {
+  |
+
+For more information about this error, try `rustc --explain E0277`.
+error: could not compile `sem-debug` (bin "sem-debug") due to 1 previous error</pre>
+<p>O <code>{:?}</code> exige o trait <code>Debug</code>. O <code>help</code> e a <code>note</code> dizem a correção: colocar <code>#[derive(Debug)]</code> acima da struct, que gera o código de impressão automaticamente.</p>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+struct Ponto {
+    x: i32,
+    y: i32,
+}
+
+fn main() {
+    let p = Ponto { x: 1, y: 2 };
+    println!("{:?}", p);
+    println!("{:#?}", p);
+    dbg!(&amp;p);
+}</pre>
+<pre class="term" data-cwd="~/projetos/com-debug">$ cargo run
+   Compiling com-debug v0.1.0 (/home/ana/projetos/com-debug)
+warning: fields `x` and `y` are never read
+ --&gt; src/main.rs:3:5
+  |
+2 | struct Ponto {
+  |        ----- fields in this struct
+3 |     x: i32,
+  |     ^
+4 |     y: i32,
+  |     ^
+  |
+  = note: `Ponto` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `com-debug` (bin "com-debug") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/com-debug`
+Ponto { x: 1, y: 2 }
+Ponto {
+    x: 1,
+    y: 2,
+}
+[src/main.rs:11:5] &amp;p = Ponto {
+    x: 1,
+    y: 2,
+}</pre>
+<p>O <code>dbg!</code> imprime na saída de erro o arquivo, a linha, a expressão e o valor. É ótimo para depurar.</p>
+<p>Repare no <code>warning</code> do começo: os campos <code>x</code> e <code>y</code> “nunca são lidos”. O compilador avisa sobre código morto (<em>dead code</em>) e, de propósito, não conta a leitura que o <code>Debug</code> faz (a <code>note</code> explica isso). Num programa de verdade, os campos são usados em algum lugar e o aviso some, como nos próximos exemplos.</p>
+
+<hr>
+<h2>3. Atalhos: inicialização e atualização</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+struct Config {
+    tema: String,
+    fonte: u32,
+    som: bool,
+}
+
+fn criar(tema: String, fonte: u32) -&gt; Config {
+    Config { tema, fonte, som: true }
+}
+
+fn main() {
+    let padrao = criar(String::from("claro"), 14);
+    let escuro = Config {
+        tema: String::from("escuro"),
+        ..padrao
+    };
+    println!("{:?}", escuro);
+    println!("tema {} | fonte {} | som {}", escuro.tema, escuro.fonte, escuro.som);
+}</pre>
+<pre class="term" data-cwd="~/projetos/atalhos">$ cargo run
+   Compiling atalhos v0.1.0 (/home/ana/projetos/atalhos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/atalhos`
+Config { tema: "escuro", fonte: 14, som: true }
+tema escuro | fonte 14 | som true</pre>
+<p>Quando a variável tem o mesmo nome do campo, basta escrever <code>tema</code> em vez de <code>tema: tema</code>. O <code>..padrao</code> preenche os campos que faltam com os de outra instância. Atenção: se um campo copiado for uma <code>String</code>, ele é <strong>movido</strong>, e a instância antiga perde aquele campo.</p>
+
+<hr>
+<h2>4. Structs de tupla e unit structs</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+struct Cor(u8, u8, u8);
+#[derive(Debug)]
+struct Metros(f64);
+#[derive(Debug)]
+struct Marcador;
+
+fn main() {
+    let laranja = Cor(255, 140, 0);
+    let distancia = Metros(42.5);
+    println!("{:?} vermelho={} verde={} azul={}", laranja, laranja.0, laranja.1, laranja.2);
+    println!("{:?} = {} m", distancia, distancia.0);
+    println!("{:?}", Marcador);
+}</pre>
+<pre class="term" data-cwd="~/projetos/tuple-struct">$ cargo run
+   Compiling tuple-struct v0.1.0 (/home/ana/projetos/tuple-struct)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/tuple-struct`
+Cor(255, 140, 0) vermelho=255 verde=140 azul=0
+Metros(42.5) = 42.5 m
+Marcador</pre>
+<p>Structs de tupla têm campos sem nome (<code>.0</code>, <code>.1</code>). São úteis para dar um tipo próprio a um valor: <code>Metros(42.5)</code> não pode ser confundido com um <code>f64</code> qualquer. A <em>unit struct</em> (<code>Marcador</code>) não tem campos e aparece com traits, mais adiante.</p>
+
+<hr>
+<h2>5. Quando dá errado: esquecer um campo</h2>
+<pre class="file" data-file="src/main.rs">struct Produto {
+    nome: String,
+    preco: f64,
+    estoque: u32,
+}
+
+fn main() {
+    let p = Produto {
+        nome: String::from("caneta"),
+        preco: 2.5,
+    };
+    println!("{}", p.nome);
+}</pre>
+<pre class="term" data-cwd="~/projetos/campo-faltando">$ cargo run
+   Compiling campo-faltando v0.1.0 (/home/ana/projetos/campo-faltando)
+error[E0063]: missing field `estoque` in initializer of `Produto`
+ --&gt; src/main.rs:8:13
+  |
+8 |     let p = Produto {
+  |             ^^^^^^^ missing `estoque`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `campo-faltando` (bin "campo-faltando") due to 1 previous error</pre>
+<p>Erro <strong>E0063</strong>: todo campo precisa de valor. Em Rust não existe campo “nulo” por esquecimento.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete o atributo que permite imprimir com <code>{:?}</code>:</p><div class="ex-code">#[derive(<input data-answer="Debug" aria-label="resposta">)]
+struct Livro { titulo: String }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para copiar os demais campos de <code>base</code>:</p><div class="ex-code">let b = Config { fonte: 18, <input data-answer="..base" aria-label="resposta"> };</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Como acessar o segundo campo de <code>struct Cor(u8, u8, u8)</code>?</p>
+<label><input type="radio" name="q1"> <code>cor[1]</code></label>
+<label><input type="radio" name="q1"> <code>cor.1</code></label>
+<label><input type="radio" name="q1"> <code>cor.segundo</code></label>
+<label><input type="radio" name="q1"> <code>cor(1)</code></label></div>
+<div class="mc" data-answer="3"><p class="mc-q">Para mudar <code>usuario.idade</code>, o que precisa ser <code>mut</code>?</p>
+<label><input type="radio" name="q2"> Só o campo <code>idade</code> na definição</label>
+<label><input type="radio" name="q2"> Nada</label>
+<label><input type="radio" name="q2"> A variável <code>usuario</code> inteira</label>
+<label><input type="radio" name="q2"> A struct, com <code>mut struct</code></label></div>
+<div class="trycmd" data-goal="src:struct\s+Livro;;src:titulo\s*:;;out:Dom Casmurro, de Machado de Assis (1899)">
+<p class="try-task"><strong>Missão:</strong> Crie a struct <code>Livro</code> com os campos <code>titulo</code>, <code>autor</code> (<code>String</code>) e <code>ano</code> (<code>u32</code>). Crie um livro e imprima <code>Dom Casmurro, de Machado de Assis (1899)</code> lendo os campos.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("Dom Casmurro, de Machado de Assis (1899)");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Livro {
+    titulo: String,
+    autor: String,
+    ano: u32,
+}
+
+fn main() {
+    let l = Livro {
+        titulo: String::from("Dom Casmurro"),
+        autor: String::from("Machado de Assis"),
+        ano: 1899,
+    };
+    println!("{}, de {} ({})", l.titulo, l.autor, l.ano);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Dom Casmurro, de Machado de Assis (1899)
+</pre>
+</div>
+<div class="trycmd" data-goal="src:#\[derive\(Debug\)\];;out:Ponto3D { x: 1, y: 2, z: 3 }">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo não compila porque <code>Ponto3D</code> não implementa <code>Debug</code>. Conserte-o para imprimir <code>Ponto3D { x: 1, y: 2, z: 3 }</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Ponto3D {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+fn main() {
+    let p = Ponto3D { x: 1, y: 2, z: 3 };
+    println!("{:?}", p);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+#[derive(Debug)]
+struct Ponto3D {
+    x: i32,
+    y: i32,
+    z: i32,
+}
+
+fn main() {
+    let p = Ponto3D { x: 1, y: 2, z: 3 };
+    println!("{:?}", p);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+warning: fields `x`, `y`, and `z` are never read
+ --&gt; src/main.rs:3:5
+  |
+2 | struct Ponto3D {
+  |        ------- fields in this struct
+3 |     x: i32,
+  |     ^
+4 |     y: i32,
+  |     ^
+5 |     z: i32,
+  |     ^
+  |
+  = note: `Ponto3D` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+  = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `missao` (bin "missao") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Ponto3D { x: 1, y: 2, z: 3 }
+</pre>
+</div>
+<div class="trycmd" data-goal="src:struct\s+Celsius\s*\(\s*f64\s*\);;out:25 °C = 77 °F">
+<p class="try-task"><strong>Missão:</strong> Crie a struct de tupla <code>Celsius(f64)</code> e uma função <code>fn para_fahrenheit(c: Celsius) -&gt; f64</code> (F = C × 9 / 5 + 32). Imprima <code>25 °C = 77 °F</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Celsius(f64);
+
+fn para_fahrenheit(c: Celsius) -&gt; f64 {
+    c.0 * 9.0 / 5.0 + 32.0
+}
+
+fn main() {
+    let t = Celsius(25.0);
+    let c = t.0;
+    println!("{} °C = {} °F", c, para_fahrenheit(t));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+25 °C = 77 °F
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>struct Nome { campo: Tipo, … }</code>; crie com <code>Nome { campo: valor, … }</code>.</li>
+<li>Todo campo precisa de valor (E0063); para mudar campos, a instância é <code>mut</code>.</li>
+<li><code>#[derive(Debug)]</code> libera <code>{:?}</code>, <code>{:#?}</code> e <code>dbg!</code>.</li>
+<li>Atalhos: <code>Nome { campo }</code> e <code>..outra</code>; structs de tupla: <code>struct Cor(u8, u8, u8)</code>.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

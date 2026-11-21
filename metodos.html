@@ -1,0 +1,344 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Métodos em Rust — impl, &amp;self, &amp;mut self, self e funções associadas | Guia Rust</title>
+<meta name="description" content="Como adicionar métodos a uma struct com impl: &amp;self para ler, &amp;mut self para mudar, self para consumir, funções associadas como new() e o erro ao chamar um método &amp;mut numa variável imutável.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Métodos e <span class="hl">impl</span></h1>
+
+<p class="intro">Um <strong>método</strong> é uma função que pertence a um tipo. Em vez de <code>area(&amp;retangulo)</code>, você escreve <code>retangulo.area()</code>. Em Rust, os métodos ficam num bloco <code>impl</code>, separado da definição da struct, e o primeiro parâmetro diz como o método usa a instância: lendo, mudando ou consumindo.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A escrever métodos com <code>&amp;self</code>, <code>&amp;mut self</code> e <code>self</code>.</li>
+<li>Funções associadas, como o construtor <code>new</code>, chamadas com <code>Tipo::funcao()</code>.</li>
+<li>O que o compilador diz quando você chama um método que muda numa variável imutável.</li>
+</ul></div>
+
+<hr>
+<h2>1. O primeiro método: <code>&amp;self</code></h2>
+<pre class="file" data-file="src/main.rs">struct Retangulo {
+    largura: u32,
+    altura: u32,
+}
+
+impl Retangulo {
+    fn area(&amp;self) -&gt; u32 {
+        self.largura * self.altura
+    }
+
+    fn cabe(&amp;self, outro: &amp;Retangulo) -&gt; bool {
+        self.largura &gt;= outro.largura &amp;&amp; self.altura &gt;= outro.altura
+    }
+}
+
+fn main() {
+    let grande = Retangulo { largura: 30, altura: 50 };
+    let pequeno = Retangulo { largura: 10, altura: 40 };
+    println!("área: {}", grande.area());
+    println!("o pequeno cabe no grande? {}", grande.cabe(&amp;pequeno));
+    println!("o grande cabe no pequeno? {}", pequeno.cabe(&amp;grande));
+}</pre>
+<pre class="term" data-cwd="~/projetos/metodo">$ cargo run
+   Compiling metodo v0.1.0 (/home/ana/projetos/metodo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/metodo`
+área: 1500
+o pequeno cabe no grande? true
+o grande cabe no pequeno? false</pre>
+<dl class="anatomy"><dt>impl Retangulo</dt><dd>“implementação para Retangulo”: o lugar dos métodos.</dd><dt>&amp;self</dt><dd>o método empresta a instância para ler (atalho de <code>self: &amp;Self</code>).</dd><dt>self.largura</dt><dd>acessa os campos pela instância.</dd><dt>grande.area()</dt><dd>a chamada com ponto; o Rust passa <code>&amp;grande</code> sozinho.</dd></dl>
+
+<hr>
+<h2>2. Funções associadas: <code>new</code></h2>
+<p>Uma função no <code>impl</code> <strong>sem</strong> <code>self</code> é uma <em>função associada</em>. A mais comum é o construtor <code>new</code>. Chama-se com <code>::</code>, como o <code>String::from</code> que você já usa.</p>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+struct Retangulo {
+    largura: u32,
+    altura: u32,
+}
+
+impl Retangulo {
+    fn new(largura: u32, altura: u32) -&gt; Self {
+        Self { largura, altura }
+    }
+
+    fn quadrado(lado: u32) -&gt; Self {
+        Self { largura: lado, altura: lado }
+    }
+}
+
+fn main() {
+    let r = Retangulo::new(3, 4);
+    let q = Retangulo::quadrado(5);
+    println!("{:?}\n{:?}", r, q);
+    println!("áreas: {} e {}", r.largura * r.altura, q.largura * q.altura);
+}</pre>
+<pre class="term" data-cwd="~/projetos/new">$ cargo run
+   Compiling new v0.1.0 (/home/ana/projetos/new)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/new`
+Retangulo { largura: 3, altura: 4 }
+Retangulo { largura: 5, altura: 5 }
+áreas: 12 e 25</pre>
+<p>Dentro do <code>impl</code>, <code>Self</code> (com maiúscula) é um apelido para o próprio tipo.</p>
+
+<hr>
+<h2>3. Métodos que mudam: <code>&amp;mut self</code></h2>
+<pre class="file" data-file="src/main.rs">struct Contador {
+    valor: u32,
+}
+
+impl Contador {
+    fn new() -&gt; Self {
+        Contador { valor: 0 }
+    }
+    fn incrementar(&amp;mut self) {
+        self.valor += 1;
+    }
+    fn zerar(&amp;mut self) {
+        self.valor = 0;
+    }
+}
+
+fn main() {
+    let mut c = Contador::new();
+    c.incrementar();
+    c.incrementar();
+    c.incrementar();
+    println!("valor: {}", c.valor);
+    c.zerar();
+    println!("depois de zerar: {}", c.valor);
+}</pre>
+<pre class="term" data-cwd="~/projetos/mut-self">$ cargo run
+   Compiling mut-self v0.1.0 (/home/ana/projetos/mut-self)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/mut-self`
+valor: 3
+depois de zerar: 0</pre>
+
+<hr>
+<h2>4. Quando dá errado: método <code>&amp;mut</code> em variável imutável</h2>
+<pre class="file" data-file="src/main.rs">struct Contador {
+    valor: u32,
+}
+
+impl Contador {
+    fn incrementar(&amp;mut self) {
+        self.valor += 1;
+    }
+}
+
+fn main() {
+    let c = Contador { valor: 0 };
+    c.incrementar();
+    println!("{}", c.valor);
+}</pre>
+<pre class="term" data-cwd="~/projetos/mut-self-erro">$ cargo run
+   Compiling mut-self-erro v0.1.0 (/home/ana/projetos/mut-self-erro)
+error[E0596]: cannot borrow `c` as mutable, as it is not declared as mutable
+  --&gt; src/main.rs:13:5
+   |
+13 |     c.incrementar();
+   |     ^ cannot borrow as mutable
+   |
+help: consider changing this to be mutable
+   |
+12 |     let mut c = Contador { valor: 0 };
+   |         +++
+
+For more information about this error, try `rustc --explain E0596`.
+error: could not compile `mut-self-erro` (bin "mut-self-erro") due to 1 previous error</pre>
+<p>O método pede <code>&amp;mut self</code>, então a variável precisa ser <code>mut</code>. A mensagem (E0596) mostra a correção: <code>let mut c</code>.</p>
+
+<hr>
+<h2>5. Métodos que consomem: <code>self</code></h2>
+<p>Com <code>self</code> (sem <code>&amp;</code>), o método recebe a <strong>posse</strong> da instância. Depois da chamada, a variável não pode mais ser usada. Serve para transformar um valor em outro:</p>
+<pre class="file" data-file="src/main.rs">struct Pedido {
+    itens: Vec&lt;String&gt;,
+}
+
+impl Pedido {
+    fn finalizar(self) -&gt; String {
+        format!("pedido com {} itens: {}", self.itens.len(), self.itens.join(", "))
+    }
+}
+
+fn main() {
+    let p = Pedido { itens: vec![String::from("café"), String::from("bolo")] };
+    let recibo = p.finalizar();
+    println!("{recibo}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/self-consome">$ cargo run
+   Compiling self-consome v0.1.0 (/home/ana/projetos/self-consome)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/self-consome`
+pedido com 2 itens: café, bolo</pre>
+<p>O <code>format!</code> funciona como o <code>println!</code>, mas devolve uma <code>String</code> em vez de imprimir.</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Primeiro parâmetro</th><th>O método…</th><th>Chamada</th></tr>
+<tr><td><code>&amp;self</code></td><td>lê a instância</td><td><code>x.metodo()</code></td></tr>
+<tr><td><code>&amp;mut self</code></td><td>muda a instância (<code>x</code> precisa ser <code>mut</code>)</td><td><code>x.metodo()</code></td></tr>
+<tr><td><code>self</code></td><td>consome a instância</td><td><code>x.metodo()</code>, e <code>x</code> deixa de valer</td></tr>
+<tr><td>(nenhum)</td><td>é uma função associada</td><td><code>Tipo::funcao()</code></td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete o primeiro parâmetro de um método que só lê:</p><div class="ex-code">fn perimetro(<input data-answer="&amp;self" aria-label="resposta">) -&gt; u32 { 2 * (self.largura + self.altura) }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete a chamada da função associada:</p><div class="ex-code">let c = Contador<input data-answer="::" aria-label="resposta">new();</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Um método com <code>self</code> (sem <code>&amp;</code>)…</p>
+<label><input type="radio" name="q1"> só lê a instância</label>
+<label><input type="radio" name="q1"> muda a instância e devolve</label>
+<label><input type="radio" name="q1"> recebe a posse; a variável não pode ser usada depois</label>
+<label><input type="radio" name="q1"> é uma função associada</label></div>
+<div class="mc" data-answer="1"><p class="mc-q">O que é <code>Self</code> dentro de <code>impl Retangulo</code>?</p>
+<label><input type="radio" name="q2"> Um apelido para o tipo <code>Retangulo</code></label>
+<label><input type="radio" name="q2"> A instância atual</label>
+<label><input type="radio" name="q2"> Uma palavra que só funciona em traits</label>
+<label><input type="radio" name="q2"> O módulo atual</label></div>
+<div class="trycmd" data-goal="src:impl\s+Circulo;;src:fn\s+area\s*\(\s*&amp;self\s*\);;out:Área: 78.54">
+<p class="try-task"><strong>Missão:</strong> Crie <code>struct Circulo { raio: f64 }</code> e, num <code>impl</code>, o método <code>fn area(&amp;self) -&gt; f64</code> (π × r², use <code>std::f64::consts::PI</code>). Para raio 5, imprima <code>Área: 78.54</code> (2 casas).</p>
+<pre class="script" data-file="src/main.rs">
+struct Circulo {
+    raio: f64,
+}
+
+fn main() {
+    let c = Circulo { raio: 5.0 };
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Circulo {
+    raio: f64,
+}
+
+impl Circulo {
+    fn area(&amp;self) -&gt; f64 {
+        std::f64::consts::PI * self.raio * self.raio
+    }
+}
+
+fn main() {
+    let c = Circulo { raio: 5.0 };
+    println!("Área: {:.2}", c.area());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Área: 78.54
+</pre>
+</div>
+<div class="trycmd" data-goal="src:fn\s+new\s*\(;;src:&amp;mut\s+self;;src:Conta::new;;out:Saldo: 70">
+<p class="try-task"><strong>Missão:</strong> Crie <code>struct Conta { saldo: i64 }</code> com <code>fn new() -&gt; Self</code> (saldo 0), <code>fn depositar(&amp;mut self, v: i64)</code> e <code>fn sacar(&amp;mut self, v: i64)</code>. Deposite 100, saque 30 e imprima <code>Saldo: 70</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Conta {
+    saldo: i64,
+}
+
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Conta {
+    saldo: i64,
+}
+
+impl Conta {
+    fn new() -&gt; Self {
+        Conta { saldo: 0 }
+    }
+    fn depositar(&amp;mut self, v: i64) {
+        self.saldo += v;
+    }
+    fn sacar(&amp;mut self, v: i64) {
+        self.saldo -= v;
+    }
+}
+
+fn main() {
+    let mut c = Conta::new();
+    c.depositar(100);
+    c.sacar(30);
+    println!("Saldo: {}", c.saldo);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Saldo: 70
+</pre>
+</div>
+<div class="trycmd" data-goal="src:let\s+mut\s+t;;out:Tarefa concluída: true;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0596. Conserte para imprimir <code>Tarefa concluída: true</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Tarefa {
+    feita: bool,
+}
+
+impl Tarefa {
+    fn concluir(&amp;mut self) {
+        self.feita = true;
+    }
+}
+
+fn main() {
+    let t = Tarefa { feita: false };
+    t.concluir();
+    println!("Tarefa concluída: {}", t.feita);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Tarefa {
+    feita: bool,
+}
+
+impl Tarefa {
+    fn concluir(&amp;mut self) {
+        self.feita = true;
+    }
+}
+
+fn main() {
+    let mut t = Tarefa { feita: false };
+    t.concluir();
+    println!("Tarefa concluída: {}", t.feita);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Tarefa concluída: true
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Métodos ficam em <code>impl Tipo { … }</code> e são chamados com ponto.</li>
+<li><code>&amp;self</code> lê, <code>&amp;mut self</code> muda, <code>self</code> consome.</li>
+<li>Funções sem <code>self</code> são associadas: <code>Tipo::new()</code>. <code>Self</code> é o próprio tipo.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
