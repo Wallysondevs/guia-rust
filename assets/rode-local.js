@@ -118,23 +118,24 @@
     var inicial = pre ? pre.textContent.replace(/^\n+/, "").replace(/\s+$/, "") : "";
     var arq = (pre && pre.getAttribute("data-file")) || "src/main.rs";
     var goal = box.getAttribute("data-goal") || "";
+    var cmd = box.getAttribute("data-cmd") || "cargo run";
     var id = "cmf" + n;
     var head = box.querySelector(".try-head");
     if (head && /clique em Rodar/.test(head.textContent)) {
-      head.textContent = "Experimente: copie o código, rode com cargo run e cole a saída";
+      head.textContent = "Experimente: copie o código, rode com " + cmd + " e cole a saída";
     }
     if (pre) pre.hidden = true;
     if (sol) sol.hidden = true;
 
     var w = el("div", { "class": "cmf ts" });
     w.innerHTML =
-      '<p class="cmf-aviso">O navegador não compila Rust. Copie o código para o <code>src/main.rs</code> de um projeto (<code>cargo new missao</code>), rode <code>cargo run</code> no terminal e cole a saída abaixo.</p>' +
+      '<p class="cmf-aviso">O navegador não compila Rust. Copie o código para o <code>src/main.rs</code> de um projeto (<code>cargo new missao</code>), rode <code>' + esc(cmd) + '</code> no terminal e cole a saída abaixo.</p>' +
       '<div class="ts-bar"><span class="ts-arq">' + esc(arq) + '</span><span class="ts-sp"></span>' +
       '<button type="button" class="sim-btn cmf-copiar">Copiar código</button>' +
       '<button type="button" class="sim-btn cmf-reset">Voltar ao original</button></div>' +
       '<div class="ts-editor"><label class="cmf-sr" for="' + id + '-cod">Código do script ' + esc(arq) + '</label>' +
       '<textarea class="ts-code cmf-cod" id="' + id + '-cod" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea></div>' +
-      '<ol class="cmf-passos"><li>Clique em <strong>Copiar código</strong>.</li><li>Cole no <code>src/main.rs</code> e rode <code>cargo run</code>.</li><li>Copie o que o terminal <strong>respondeu</strong> (inclusive as linhas do <code>cargo</code>) e cole abaixo.</li></ol>' +
+      '<ol class="cmf-passos"><li>Clique em <strong>Copiar código</strong>.</li><li>Cole no <code>src/main.rs</code> e rode <code>' + esc(cmd) + '</code>.</li><li>Copie o que o terminal <strong>respondeu</strong> (inclusive as linhas do <code>cargo</code>) e cole abaixo.</li></ol>' +
       '<label class="cmf-rot" for="' + id + '-out">Cole aqui o que o terminal respondeu (não o código)</label>' +
       '<textarea class="cmf-out" id="' + id + '-out" rows="5" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Ex.: o texto que apareceu no terminal depois de você apertar Enter"></textarea>' +
       '<div class="ex-actions cmf-acoes"><button type="button" class="cmf-conferir">Conferir</button>' +
@@ -178,7 +179,7 @@
       var linhasCol = out.value.split("\n").map(norm).filter(Boolean);
       var soCodigo = linhasCol.length && linhasCol.every(function (l) { return linhasCod.indexOf(l) >= 0; });
       if (soCodigo || colado === norm(cod.value) || colado === norm(inicial) || (sol && colado === norm(sol.textContent))) {
-        resDiv.innerHTML = '<p class="ex-result bad">Parece que você colou o <strong>código</strong>, não a saída. Rode esse código com <code>cargo run</code> e cole aqui o que ele <strong>respondeu</strong>.</p>';
+        resDiv.innerHTML = '<p class="ex-result bad">Parece que você colou o <strong>código</strong>, não a saída. Rode esse código com <code>' + esc(cmd) + '</code> e cole aqui o que ele <strong>respondeu</strong>.</p>';
         out.focus(); return;
       }
       var metas;

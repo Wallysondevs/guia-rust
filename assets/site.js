@@ -74,7 +74,8 @@ var NIVEIS = [
     ]},
     { grupo: "Rust Avançado", itens: [
       ["macros.html", "Macros declarativas"],
-      ["unsafe.html", "unsafe básico"]
+      ["unsafe.html", "unsafe básico"],
+      ["traits-std.html", "Traits da biblioteca padrão"]
     ]}
   ]}
 ];

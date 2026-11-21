@@ -1,0 +1,384 @@
+---
+slug: traits-std
+menu: Traits da biblioteca padrão
+titulo: Traits da biblioteca padrão em Rust — Display, From/Into, Default, operadores e Iterator | Guia Rust
+desc: Os traits da biblioteca padrão que todo tipo Rust deveria conhecer: Display e Debug, Default, From e Into, TryFrom, sobrecarga de operadores com Add e Neg, PartialOrd e Ord para ordenar, e Iterator para seus próprios tipos.
+h1: Traits da <span class="hl">biblioteca padrão</span>
+nivel: n3
+grupo: Rust Avançado
+---
+<p class="intro">Muita coisa “mágica” do Rust é só um trait da biblioteca padrão: <code>{}</code> no <code>println!</code> usa <code>Display</code>, <code>+</code> usa <code>Add</code>, <code>for</code> usa <code>Iterator</code>, o <code>?</code> usa <code>From</code>. Implementando esses traits, seus tipos passam a funcionar com todas essas ferramentas.</p>
+
+<hr>
+<h2>1. Display: como o tipo aparece com {}</h2>
+::: exemplo display
+use std::fmt;
+
+#[derive(Debug)]
+struct Dinheiro {
+    centavos: i64,
+}
+
+impl fmt::Display for Dinheiro {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "R$ {},{:02}", self.centavos / 100, self.centavos % 100)
+    }
+}
+
+fn main() {
+    let preco = Dinheiro { centavos: 1999 };
+    println!("{}", preco);
+    println!("{:?}", preco);
+    let texto = preco.to_string();
+    println!("texto com {} caracteres", texto.chars().count());
+}
+:::
+<p><code>Debug</code> (com <code>derive</code>) é para programadores; <code>Display</code> é para usuários e precisa ser escrito à mão. Ganho extra: quem implementa <code>Display</code> ganha <code>.to_string()</code> de graça.</p>
+
+<hr>
+<h2>2. Default</h2>
+::: exemplo default
+#[derive(Debug, Default)]
+struct Config {
+    porta: u16,
+    detalhado: bool,
+    nome: String,
+}
+
+#[derive(Debug)]
+struct Janela {
+    largura: u32,
+    altura: u32,
+}
+
+impl Default for Janela {
+    fn default() -> Self {
+        Janela { largura: 800, altura: 600 }
+    }
+}
+
+fn main() {
+    println!("{:?}", Config::default());
+    let c = Config { porta: 8080, ..Default::default() };
+    println!("{:?}", c);
+    if !c.detalhado && c.nome.is_empty() {
+        println!("porta {} sem nome e sem detalhes", c.porta);
+    }
+    let j = Janela::default();
+    println!("{:?} tem {} pixels", j, j.largura * j.altura);
+}
+:::
+<p>O <code>derive(Default)</code> usa o padrão de cada campo (0, <code>false</code>, texto vazio). <code>..Default::default()</code> preenche “o resto” dos campos.</p>
+
+<hr>
+<h2>3. From e Into: conversões</h2>
+::: exemplo from-into
+#[derive(Debug)]
+struct Celsius(f64);
+
+#[derive(Debug)]
+struct Fahrenheit(f64);
+
+impl From<Celsius> for Fahrenheit {
+    fn from(c: Celsius) -> Self {
+        Fahrenheit(c.0 * 9.0 / 5.0 + 32.0)
+    }
+}
+
+fn main() {
+    let f = Fahrenheit::from(Celsius(100.0));
+    println!("{:?}", f);
+
+    let g: Fahrenheit = Celsius(37.0).into();
+    println!("{:.1} °F", g.0);
+
+    let s: String = "texto".into();
+    let n: i64 = 42i32.into();
+    println!("{s} {n}");
+}
+:::
+<p>Implemente só <code>From</code>; o <code>Into</code> vem automaticamente no sentido contrário. É o <code>From</code> que o operador <code>?</code> usa para converter tipos de erro.</p>
+<h3>TryFrom: conversão que pode falhar</h3>
+::: exemplo try-from
+use std::convert::TryFrom;
+
+#[derive(Debug)]
+struct Nota(u8);
+
+impl TryFrom<i32> for Nota {
+    type Error = String;
+    fn try_from(v: i32) -> Result<Self, Self::Error> {
+        if (0..=10).contains(&v) {
+            Ok(Nota(v as u8))
+        } else {
+            Err(format!("{v} não é uma nota de 0 a 10"))
+        }
+    }
+}
+
+fn main() {
+    println!("{:?}", Nota::try_from(8));
+    println!("{:?}", Nota::try_from(15));
+    let r: Result<Nota, _> = 7.try_into();
+    if let Ok(nota) = r {
+        println!("nota válida: {}", nota.0);
+    }
+    println!("{:?}", u8::try_from(300));
+}
+:::
+
+<hr>
+<h2>4. Sobrecarga de operadores</h2>
+::: exemplo operadores
+use std::ops::{Add, Mul, Neg};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Vetor {
+    x: f64,
+    y: f64,
+}
+
+impl Add for Vetor {
+    type Output = Vetor;
+    fn add(self, outro: Vetor) -> Vetor {
+        Vetor { x: self.x + outro.x, y: self.y + outro.y }
+    }
+}
+
+impl Mul<f64> for Vetor {
+    type Output = Vetor;
+    fn mul(self, k: f64) -> Vetor {
+        Vetor { x: self.x * k, y: self.y * k }
+    }
+}
+
+impl Neg for Vetor {
+    type Output = Vetor;
+    fn neg(self) -> Vetor {
+        Vetor { x: -self.x, y: -self.y }
+    }
+}
+
+fn main() {
+    let a = Vetor { x: 1.0, y: 2.0 };
+    let b = Vetor { x: 3.0, y: -1.0 };
+    println!("a + b = {:?}", a + b);
+    println!("a * 3 = {:?}", a * 3.0);
+    println!("-b    = {:?}", -b);
+    println!("a + b == b + a? {}", a + b == b + a);
+}
+:::
+<p>Cada operador é um trait de <code>std::ops</code>: <code>Add</code> (+), <code>Sub</code> (−), <code>Mul</code> (*), <code>Div</code> (/), <code>Neg</code> (− na frente), <code>AddAssign</code> (+=), <code>Index</code> ([]). O <code>==</code> vem de <code>PartialEq</code>.</p>
+
+<hr>
+<h2>5. Ordenando seus tipos: PartialOrd e Ord</h2>
+::: exemplo ord
+use std::cmp::Ordering;
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Versao(u32, u32, u32);
+
+#[derive(Debug, PartialEq, Eq)]
+struct Tarefa {
+    nome: &'static str,
+    prioridade: u8,
+}
+
+impl Ord for Tarefa {
+    fn cmp(&self, outra: &Self) -> Ordering {
+        outra.prioridade.cmp(&self.prioridade).then(self.nome.cmp(outra.nome))
+    }
+}
+
+impl PartialOrd for Tarefa {
+    fn partial_cmp(&self, outra: &Self) -> Option<Ordering> {
+        Some(self.cmp(outra))
+    }
+}
+
+fn main() {
+    let mut versoes = vec![Versao(1, 10, 0), Versao(1, 2, 3), Versao(0, 9, 9)];
+    versoes.sort();
+    println!("{:?}", versoes);
+    println!("1.2.3 < 1.10.0? {}", Versao(1, 2, 3) < Versao(1, 10, 0));
+
+    let mut tarefas = vec![
+        Tarefa { nome: "lavar louça", prioridade: 1 },
+        Tarefa { nome: "pagar conta", prioridade: 5 },
+        Tarefa { nome: "estudar Rust", prioridade: 5 },
+    ];
+    tarefas.sort();
+    for t in &tarefas {
+        println!("{} ({})", t.nome, t.prioridade);
+    }
+}
+:::
+<p>O <code>derive</code> compara campo por campo, na ordem em que aparecem: ótimo para versões. Para outra regra (aqui: maior prioridade primeiro, empate pelo nome), implemente <code>Ord</code> à mão.</p>
+
+<hr>
+<h2>6. Iterator para seus tipos</h2>
+::: exemplo iterator
+struct Fibonacci {
+    atual: u64,
+    proximo: u64,
+}
+
+impl Iterator for Fibonacci {
+    type Item = u64;
+    fn next(&mut self) -> Option<u64> {
+        let v = self.atual;
+        self.atual = self.proximo;
+        self.proximo += v;
+        Some(v)
+    }
+}
+
+fn fibonacci() -> Fibonacci {
+    Fibonacci { atual: 0, proximo: 1 }
+}
+
+fn main() {
+    let primeiros: Vec<u64> = fibonacci().take(10).collect();
+    println!("{:?}", primeiros);
+    let soma_pares: u64 = fibonacci().take_while(|&n| n < 1000).filter(|n| n % 2 == 0).sum();
+    println!("soma dos pares abaixo de 1000: {soma_pares}");
+}
+:::
+<p>Só o método <code>next</code> é obrigatório. Todos os adaptadores (<code>take</code>, <code>filter</code>, <code>sum</code>…) vêm de graça.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o trait usado pelo <code>{}</code>:
+impl fmt::[[Display]] for Ponto { ... }
+:::
+::: ex
+Complete o trait do operador <code>+</code>:
+impl std::ops::[[Add]] for Ponto { ... }
+:::
+::: ex
+Complete o único método obrigatório de um iterador:
+fn [[next]](&mut self) -> Option<Self::Item>
+:::
+::: mc 2
+Implementando <code>From&lt;A&gt; for B</code>, o que você ganha automaticamente?
+- <code>Display</code> para <code>B</code>
+- <code>Into&lt;B&gt;</code> para <code>A</code>
+- <code>Clone</code> para os dois
+- nada
+:::
+::: missao goal="src:impl\s+fmt::Display\s+for\s+Hora;;out:09:05;;semerro"
+Implemente <code>fmt::Display</code> para <code>Hora</code>, mostrando horas e minutos sempre com dois dígitos, para o programa imprimir <code>09:05</code>.
+--- script
+use std::fmt;
+
+struct Hora {
+    h: u8,
+    m: u8,
+}
+
+fn main() {
+    let agora = Hora { h: 9, m: 5 };
+    println!("{}:{}", agora.h, agora.m);
+}
+--- solucao
+use std::fmt;
+
+struct Hora {
+    h: u8,
+    m: u8,
+}
+
+impl fmt::Display for Hora {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:02}:{:02}", self.h, self.m)
+    }
+}
+
+fn main() {
+    let agora = Hora { h: 9, m: 5 };
+    println!("{}", agora);
+}
+:::
+::: missao goal="src:impl\s+Add\s+for\s+Tempo;;out:Tempo { segundos: 150 };;semerro"
+Implemente <code>Add</code> para <code>Tempo</code> (somando os segundos) e troque a soma manual por <code>a + b</code>. A saída deve ser <code>Tempo { segundos: 150 }</code>.
+--- script
+use std::ops::Add;
+
+#[derive(Debug)]
+struct Tempo {
+    segundos: u32,
+}
+
+fn main() {
+    let a = Tempo { segundos: 90 };
+    let b = Tempo { segundos: 60 };
+    let total = Tempo { segundos: a.segundos + b.segundos };
+    println!("{:?}", total);
+}
+--- solucao
+use std::ops::Add;
+
+#[derive(Debug)]
+struct Tempo {
+    segundos: u32,
+}
+
+impl Add for Tempo {
+    type Output = Tempo;
+    fn add(self, outro: Tempo) -> Tempo {
+        Tempo { segundos: self.segundos + outro.segundos }
+    }
+}
+
+fn main() {
+    let a = Tempo { segundos: 90 };
+    let b = Tempo { segundos: 60 };
+    let total = a + b;
+    println!("{:?}", total);
+}
+:::
+::: missao goal="src:impl\s+Iterator\s+for\s+Contagem;;out:[3, 2, 1];;semerro"
+Implemente <code>Iterator</code> para <code>Contagem</code>: cada <code>next</code> devolve o valor atual e diminui 1, e devolve <code>None</code> quando chegar a zero. A saída deve ser <code>[3, 2, 1]</code>.
+--- script
+struct Contagem {
+    n: u32,
+}
+
+fn main() {
+    let c = Contagem { n: 3 };
+    let v: Vec<u32> = vec![c.n];
+    println!("{:?}", v);
+}
+--- solucao
+struct Contagem {
+    n: u32,
+}
+
+impl Iterator for Contagem {
+    type Item = u32;
+    fn next(&mut self) -> Option<u32> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            Some(self.n + 1)
+        }
+    }
+}
+
+fn main() {
+    let c = Contagem { n: 3 };
+    let v: Vec<u32> = c.collect();
+    println!("{:?}", v);
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Display</code> define o <code>{}</code> e dá <code>to_string()</code>; <code>Debug</code> define o <code>{:?}</code>.</li>
+<li><code>Default</code> dá valores iniciais; <code>..Default::default()</code> completa structs.</li>
+<li><code>From</code> dá <code>Into</code> de graça; <code>TryFrom</code> para conversões que podem falhar.</li>
+<li>Operadores são traits de <code>std::ops</code>; <code>Ord</code> define a ordem do <code>sort</code>; <code>Iterator</code> só exige <code>next</code>.</li>
+</ul>
