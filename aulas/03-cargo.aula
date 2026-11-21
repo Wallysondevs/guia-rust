@@ -1,0 +1,151 @@
+---
+slug: cargo
+menu: Projetos com cargo
+titulo: cargo new, cargo build, cargo run e cargo check | Guia Rust
+desc: Como criar um projeto Rust com cargo new, entender o Cargo.toml e o src/main.rs, compilar com cargo build, rodar com cargo run, conferir rápido com cargo check e gerar a versão otimizada com --release.
+h1: Projetos com <span class="hl">cargo</span>
+nivel: n1
+grupo: Começando
+---
+<p class="intro">O <strong>cargo</strong> é o gerente de projetos do Rust. Com ele você cria a estrutura de pastas, compila, roda, testa e baixa bibliotecas. Quase todo projeto Rust do mundo é organizado do mesmo jeito, então o que você aprender aqui serve para qualquer um.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar um projeto com <code>cargo new</code> e a ler o <code>Cargo.toml</code>.</li>
+<li>A diferença entre <code>cargo build</code>, <code>cargo run</code> e <code>cargo check</code>.</li>
+<li>Onde fica o executável e o que muda com <code>--release</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Criando o projeto</h2>
+::: terminal ola cwd=~/projetos
+$ cargo new ola
+$ ls -a ola
+$ cat ola/Cargo.toml
+$ cat ola/src/main.rs
+:::
+<p>O <code>cargo new</code> criou uma pasta com tudo pronto, inclusive um repositório git (a pasta <code>.git</code> e o <code>.gitignore</code>). O programa inicial já é o clássico “Hello, world!”.</p>
+<dl class="anatomy"><dt>[package]</dt><dd>os dados do projeto (o <em>pacote</em>).</dd><dt>name</dt><dd>o nome, que também vira o nome do executável.</dd><dt>version</dt><dd>a versão do seu programa.</dd><dt>edition</dt><dd>a edição da linguagem (2015, 2018, 2021, 2024): regras de sintaxe que o projeto segue.</dd><dt>[dependencies]</dt><dd>as bibliotecas de que o projeto precisa (por enquanto, nenhuma).</dd></dl>
+
+<hr>
+<h2>2. Compilar e rodar: <code>cargo run</code></h2>
+<p>Dentro da pasta do projeto, <code>cargo run</code> compila (se precisar) e roda:</p>
+::: terminal ola-run cwd=~/projetos
+$ cargo new ola-run
+$ cd ola-run
+$ cargo run
+$ cargo run
+:::
+<p>Repare nas três linhas que o cargo escreve antes da saída do programa: <code>Compiling</code> (compilando), <code>Finished</code> (terminou, com o perfil <code>dev</code>, sem otimização e com informação de depuração) e <code>Running</code> (rodando o executável). Na segunda vez não há <code>Compiling</code>: nada mudou, então o cargo reaproveitou o executável.</p>
+
+<hr>
+<h2>3. Só compilar: <code>cargo build</code></h2>
+::: terminal ola-build cwd=~/projetos
+$ cargo new ola-build
+$ cd ola-build
+$ cargo build
+$ ls target/debug
+$ ./target/debug/ola-build
+:::
+<p>O executável fica em <code>target/debug/</code>. A pasta <code>target</code> guarda tudo que o compilador gera e pode ser apagada sem medo (<code>cargo clean</code>): o cargo recria na próxima compilação.</p>
+
+<hr>
+<h2>4. Conferir sem gerar executável: <code>cargo check</code></h2>
+<p>Quando você só quer saber se o código compila, o <code>cargo check</code> é mais rápido: ele faz todas as conferências do compilador, mas não gera o executável. É o comando que mais se usa enquanto se escreve código.</p>
+::: terminal ola-check projeto
+$ cargo check
+--- codigo
+fn main() {
+    let idade = 30;
+    println!("Olá!");
+}
+:::
+<p>O código compila (<code>Finished</code>), mas o compilador deixou um <code>warning</code>, um aviso: a variável <code>idade</code> nunca foi usada. Aviso não impede a compilação, mas vale ler. A linha <code>help</code> até sugere a correção.</p>
+
+<hr>
+<h2>5. A versão otimizada: <code>--release</code></h2>
+::: terminal ola-release projeto
+$ cargo build --release
+$ ls target
+--- codigo
+fn main() {
+    println!("versão otimizada");
+}
+:::
+<p>Com <code>--release</code> o perfil muda para <code>release</code> (<code>optimized</code>) e o executável vai para <code>target/release/</code>. A compilação demora mais e o programa fica bem mais rápido. Use <code>--release</code> para medir desempenho e para entregar o programa; no dia a dia, o padrão (<code>dev</code>) compila mais depressa.</p>
+
+<hr>
+<h2>Quando dá errado: fora da pasta do projeto</h2>
+::: terminal fora cwd=~
+$ cargo run
+:::
+<p>O cargo procura o <code>Cargo.toml</code> na pasta atual e nas de cima. Fora de um projeto, ele não acha e avisa. Entre na pasta com <code>cd</code> e rode de novo.</p>
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>cargo new nome</code></td><td>Cria um projeto de programa (binário).</td></tr>
+<tr><td><code>cargo new --lib nome</code></td><td>Cria um projeto de biblioteca.</td></tr>
+<tr><td><code>cargo run</code></td><td>Compila se precisar e roda.</td></tr>
+<tr><td><code>cargo build</code></td><td>Só compila (em <code>target/debug</code>).</td></tr>
+<tr><td><code>cargo check</code></td><td>Confere se compila, sem gerar executável.</td></tr>
+<tr><td><code>cargo build --release</code></td><td>Compila otimizado (em <code>target/release</code>).</td></tr>
+<tr><td><code>cargo clean</code></td><td>Apaga a pasta <code>target</code>.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para criar um projeto chamado <code>agenda</code>:
+$ cargo [[new]] agenda
+:::
+::: ex
+Complete para conferir o código sem gerar executável:
+$ cargo [[check]]
+:::
+::: mc 3
+Em qual arquivo fica o nome e a versão do projeto?
+- <code>src/main.rs</code>
+- <code>target/debug/</code>
+- <code>Cargo.toml</code>
+- <code>.gitignore</code>
+:::
+::: mc 4
+Para onde vai o executável de <code>cargo build --release</code>?
+- <code>src/release/</code>
+- <code>target/debug/</code>
+- <code>~/.cargo/bin/</code>
+- <code>target/release/</code>
+:::
+::: missao goal="src:println!\(\x22Projeto da Ana\x22\);;out:Projeto da Ana;;out:Running `target/debug/missao`"
+Crie um projeto chamado <code>missao</code> com <code>cargo new missao</code>, troque a mensagem para <code>Projeto da Ana</code> e rode com <code>cargo run</code>. Cole a saída inteira, inclusive as linhas do cargo.
+--- script
+fn main() {
+    println!("Hello, world!");
+}
+--- solucao
+fn main() {
+    println!("Projeto da Ana");
+}
+:::
+::: missao goal="src:let\s+ano;;src:\{ano\}|\{\}.*ano;;out:Ano: 2026;;semerro"
+O <code>cargo check</code> avisou que a variável <code>ano</code> não é usada. Use-a: imprima <code>Ano: 2026</code> com o valor da variável (por exemplo, <code>println!("Ano: {ano}");</code>), de modo que o aviso suma.
+--- script
+fn main() {
+    let ano = 2026;
+    println!("Ano:");
+}
+--- solucao
+fn main() {
+    let ano = 2026;
+    println!("Ano: {ano}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>cargo new</code> cria a estrutura: <code>Cargo.toml</code> + <code>src/main.rs</code> + git.</li>
+<li><code>cargo run</code> compila e roda; <code>cargo build</code> só compila; <code>cargo check</code> só confere.</li>
+<li>Executáveis em <code>target/debug</code> ou, com <code>--release</code>, em <code>target/release</code>.</li>
+<li>Warnings não impedem a compilação, mas costumam apontar algo esquecido.</li>
+</ul>

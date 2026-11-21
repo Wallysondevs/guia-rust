@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial Rust — aprenda Rust do zero, em português | Guia Rust</title>
+<meta name="description" content="Curso de Rust em português para quem está começando: cargo, variáveis, tipos, ownership, borrowing, structs, enums, traits, generics, lifetimes, closures, iteradores, testes, concorrência, macros e um projeto final. Todo exemplo foi compilado e rodado de verdade.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="hero">
+<h1>Tutorial Rust</h1>
+<p>Aprenda <strong>Rust</strong> do zero, em português, como numa escola: cada aula ensina um assunto, explica o código pedaço por pedaço e mostra a resposta <strong>de verdade</strong> do compilador. Todos os exemplos deste guia foram compilados e rodados com o <code>rustc 1.100.0</code>, e os erros aparecem exatamente como o compilador escreveu.</p>
+<a class="btn btn-lg" href="introducao.html">Comece aqui &#10095;</a>
+</div>
+
+<div class="pager"></div>
+
+<p>A primeira aula é <a href="introducao.html">O que é Rust</a>. Depois vêm a <a href="instalacao.html">instalação</a>, o <a href="cargo.html">cargo</a> e o primeiro programa.</p>
+
+<hr>
+
+<h2>O que é este guia</h2>
+<p><strong>Rust</strong> é uma linguagem de programação rápida como C e C++, mas que impede, já na compilação, uma família inteira de bugs: uso de memória já liberada, ponteiro nulo, corrida de dados entre threads. O preço é aprender algumas regras novas, principalmente o <strong>ownership</strong> (posse) e o <strong>borrowing</strong> (empréstimo). Este guia ensina essas regras com calma, com exemplos pequenos e com os erros reais que o compilador mostra quando a gente quebra uma delas.</p>
+<p>O guia é para quem já viu um pouco de programação (uma variável, um <code>if</code>, uma função) em qualquer linguagem. Não precisa saber C. Os exemplos acompanham a Ana, que estuda Rust no computador <code>notebook</code>, com os projetos na pasta <code>/home/ana/projetos</code>.</p>
+<p>O texto está em português do Brasil. O código, as palavras-chave e as mensagens do compilador ficam em inglês, como o Rust escreve. As mensagens de erro <strong>não são traduzidas</strong>: aparecem exatamente como o <code>cargo</code> mostrou, com a explicação em português logo depois.</p>
+
+<hr>
+
+<h2>Como estudar</h2>
+<ol class="passo">
+  <li><strong>Leia com calma.</strong> Leia a ideia, o código e a saída. Não pule as partes “Quando dá errado”: os erros do compilador ensinam muito.</li>
+  <li><strong>Rode os exemplos.</strong> Crie um projeto com <code>cargo new</code>, cole o código no <code>src/main.rs</code> e rode <code>cargo run</code>.</li>
+  <li><strong>Faça as missões.</strong> Cada caixa <strong>Missão</strong> pede um programa. Escreva, rode com <code>cargo run</code> e cole a saída na caixa: ela confere o código e a saída.</li>
+  <li><strong>Erre de propósito.</strong> Mude uma linha, quebre uma regra e leia o que o compilador diz. É o jeito mais rápido de ficar amigo dele.</li>
+</ol>
+
+<div class="tip">
+<strong>A regra de ouro</strong>
+<p>O compilador do Rust é exigente, mas é um professor paciente: quase toda mensagem de erro diz o que está errado, onde e, muitas vezes, como consertar (as linhas <code>help:</code>). Leia a mensagem inteira antes de mexer no código.</p>
+</div>
+
+<hr>
+
+<h2>Escolha sua trilha</h2>
+<p>O guia tem três níveis, pensados para serem feitos em ordem. O mapa abaixo é montado a partir da lista oficial de aulas.</p>
+<div id="mapa-niveis" class="trilhas"></div>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

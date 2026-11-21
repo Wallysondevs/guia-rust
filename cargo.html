@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cargo new, cargo build, cargo run e cargo check | Guia Rust</title>
+<meta name="description" content="Como criar um projeto Rust com cargo new, entender o Cargo.toml e o src/main.rs, compilar com cargo build, rodar com cargo run, conferir rápido com cargo check e gerar a versão otimizada com --release.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Projetos com <span class="hl">cargo</span></h1>
+
+<p class="intro">O <strong>cargo</strong> é o gerente de projetos do Rust. Com ele você cria a estrutura de pastas, compila, roda, testa e baixa bibliotecas. Quase todo projeto Rust do mundo é organizado do mesmo jeito, então o que você aprender aqui serve para qualquer um.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar um projeto com <code>cargo new</code> e a ler o <code>Cargo.toml</code>.</li>
+<li>A diferença entre <code>cargo build</code>, <code>cargo run</code> e <code>cargo check</code>.</li>
+<li>Onde fica o executável e o que muda com <code>--release</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Criando o projeto</h2>
+<pre class="term" data-cwd="~/projetos">$ cargo new ola
+    Creating binary (application) `ola` package
+note: see more `Cargo.toml` keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+$ ls -a ola
+.
+..
+.git
+.gitignore
+Cargo.toml
+src
+$ cat ola/Cargo.toml
+[package]
+name = "ola"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+$ cat ola/src/main.rs
+fn main() {
+    println!("Hello, world!");
+}</pre>
+<p>O <code>cargo new</code> criou uma pasta com tudo pronto, inclusive um repositório git (a pasta <code>.git</code> e o <code>.gitignore</code>). O programa inicial já é o clássico “Hello, world!”.</p>
+<dl class="anatomy"><dt>[package]</dt><dd>os dados do projeto (o <em>pacote</em>).</dd><dt>name</dt><dd>o nome, que também vira o nome do executável.</dd><dt>version</dt><dd>a versão do seu programa.</dd><dt>edition</dt><dd>a edição da linguagem (2015, 2018, 2021, 2024): regras de sintaxe que o projeto segue.</dd><dt>[dependencies]</dt><dd>as bibliotecas de que o projeto precisa (por enquanto, nenhuma).</dd></dl>
+
+<hr>
+<h2>2. Compilar e rodar: <code>cargo run</code></h2>
+<p>Dentro da pasta do projeto, <code>cargo run</code> compila (se precisar) e roda:</p>
+<pre class="term" data-cwd="~/projetos">$ cargo new ola-run
+    Creating binary (application) `ola-run` package
+note: see more `Cargo.toml` keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+$ cd ola-run
+$ cargo run
+   Compiling ola-run v0.1.0 (/home/ana/projetos/ola-run)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/ola-run`
+Hello, world!
+$ cargo run
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+     Running `target/debug/ola-run`
+Hello, world!</pre>
+<p>Repare nas três linhas que o cargo escreve antes da saída do programa: <code>Compiling</code> (compilando), <code>Finished</code> (terminou, com o perfil <code>dev</code>, sem otimização e com informação de depuração) e <code>Running</code> (rodando o executável). Na segunda vez não há <code>Compiling</code>: nada mudou, então o cargo reaproveitou o executável.</p>
+
+<hr>
+<h2>3. Só compilar: <code>cargo build</code></h2>
+<pre class="term" data-cwd="~/projetos">$ cargo new ola-build
+    Creating binary (application) `ola-build` package
+note: see more `Cargo.toml` keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+$ cd ola-build
+$ cargo build
+   Compiling ola-build v0.1.0 (/home/ana/projetos/ola-build)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+$ ls target/debug
+build
+examples
+incremental
+ola-build
+ola-build.d
+$ ./target/debug/ola-build
+Hello, world!</pre>
+<p>O executável fica em <code>target/debug/</code>. A pasta <code>target</code> guarda tudo que o compilador gera e pode ser apagada sem medo (<code>cargo clean</code>): o cargo recria na próxima compilação.</p>
+
+<hr>
+<h2>4. Conferir sem gerar executável: <code>cargo check</code></h2>
+<p>Quando você só quer saber se o código compila, o <code>cargo check</code> é mais rápido: ele faz todas as conferências do compilador, mas não gera o executável. É o comando que mais se usa enquanto se escreve código.</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let idade = 30;
+    println!("Olá!");
+}</pre>
+<pre class="term" data-cwd="~/projetos/ola-check">$ cargo check
+    Checking ola-check v0.1.0 (/home/ana/projetos/ola-check)
+warning: unused variable: `idade`
+ --&gt; src/main.rs:2:9
+  |
+2 |     let idade = 30;
+  |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_idade`
+  |
+  = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `ola-check` (bin "ola-check") generated 1 warning (run `cargo fix --bin "ola-check" -p ola-check` to apply 1 suggestion)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s</pre>
+<p>O código compila (<code>Finished</code>), mas o compilador deixou um <code>warning</code>, um aviso: a variável <code>idade</code> nunca foi usada. Aviso não impede a compilação, mas vale ler. A linha <code>help</code> até sugere a correção.</p>
+
+<hr>
+<h2>5. A versão otimizada: <code>--release</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    println!("versão otimizada");
+}</pre>
+<pre class="term" data-cwd="~/projetos/ola-release">$ cargo build --release
+   Compiling ola-release v0.1.0 (/home/ana/projetos/ola-release)
+    Finished `release` profile [optimized] target(s) in 0.07s
+$ ls target
+CACHEDIR.TAG
+release</pre>
+<p>Com <code>--release</code> o perfil muda para <code>release</code> (<code>optimized</code>) e o executável vai para <code>target/release/</code>. A compilação demora mais e o programa fica bem mais rápido. Use <code>--release</code> para medir desempenho e para entregar o programa; no dia a dia, o padrão (<code>dev</code>) compila mais depressa.</p>
+
+<hr>
+<h2>Quando dá errado: fora da pasta do projeto</h2>
+<pre class="term" data-cwd="~">$ cargo run
+error: could not find `Cargo.toml` in `/home/ana` or any parent directory</pre>
+<p>O cargo procura o <code>Cargo.toml</code> na pasta atual e nas de cima. Fora de um projeto, ele não acha e avisa. Entre na pasta com <code>cd</code> e rode de novo.</p>
+
+<hr>
+<h2>Referência rápida</h2>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>cargo new nome</code></td><td>Cria um projeto de programa (binário).</td></tr>
+<tr><td><code>cargo new --lib nome</code></td><td>Cria um projeto de biblioteca.</td></tr>
+<tr><td><code>cargo run</code></td><td>Compila se precisar e roda.</td></tr>
+<tr><td><code>cargo build</code></td><td>Só compila (em <code>target/debug</code>).</td></tr>
+<tr><td><code>cargo check</code></td><td>Confere se compila, sem gerar executável.</td></tr>
+<tr><td><code>cargo build --release</code></td><td>Compila otimizado (em <code>target/release</code>).</td></tr>
+<tr><td><code>cargo clean</code></td><td>Apaga a pasta <code>target</code>.</td></tr>
+</table></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para criar um projeto chamado <code>agenda</code>:</p><div class="ex-code">$ cargo <input data-answer="new" aria-label="resposta"> agenda</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para conferir o código sem gerar executável:</p><div class="ex-code">$ cargo <input data-answer="check" aria-label="resposta"></div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Em qual arquivo fica o nome e a versão do projeto?</p>
+<label><input type="radio" name="q1"> <code>src/main.rs</code></label>
+<label><input type="radio" name="q1"> <code>target/debug/</code></label>
+<label><input type="radio" name="q1"> <code>Cargo.toml</code></label>
+<label><input type="radio" name="q1"> <code>.gitignore</code></label></div>
+<div class="mc" data-answer="4"><p class="mc-q">Para onde vai o executável de <code>cargo build --release</code>?</p>
+<label><input type="radio" name="q2"> <code>src/release/</code></label>
+<label><input type="radio" name="q2"> <code>target/debug/</code></label>
+<label><input type="radio" name="q2"> <code>~/.cargo/bin/</code></label>
+<label><input type="radio" name="q2"> <code>target/release/</code></label></div>
+<div class="trycmd" data-goal="src:println!\(\x22Projeto da Ana\x22\);;out:Projeto da Ana;;out:Running `target/debug/missao`">
+<p class="try-task"><strong>Missão:</strong> Crie um projeto chamado <code>missao</code> com <code>cargo new missao</code>, troque a mensagem para <code>Projeto da Ana</code> e rode com <code>cargo run</code>. Cole a saída inteira, inclusive as linhas do cargo.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("Hello, world!");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    println!("Projeto da Ana");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Projeto da Ana
+</pre>
+</div>
+<div class="trycmd" data-goal="src:let\s+ano;;src:\{ano\}|\{\}.*ano;;out:Ano: 2026;;semerro">
+<p class="try-task"><strong>Missão:</strong> O <code>cargo check</code> avisou que a variável <code>ano</code> não é usada. Use-a: imprima <code>Ano: 2026</code> com o valor da variável (por exemplo, <code>println!("Ano: {ano}");</code>), de modo que o aviso suma.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let ano = 2026;
+    println!("Ano:");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let ano = 2026;
+    println!("Ano: {ano}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Ano: 2026
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>cargo new</code> cria a estrutura: <code>Cargo.toml</code> + <code>src/main.rs</code> + git.</li>
+<li><code>cargo run</code> compila e roda; <code>cargo build</code> só compila; <code>cargo check</code> só confere.</li>
+<li>Executáveis em <code>target/debug</code> ou, com <code>--release</code>, em <code>target/release</code>.</li>
+<li>Warnings não impedem a compilação, mas costumam apontar algo esquecido.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+---
+slug: introducao
+menu: O que é Rust
+titulo: O que é Rust — a linguagem, o compilador e o cargo | Guia Rust
+desc: O que é a linguagem Rust, para que serve, o que a torna diferente (ownership, segurança de memória sem coletor de lixo) e as ferramentas rustc, cargo e rustup.
+h1: O que é <span class="hl">Rust</span>
+nivel: n1
+grupo: Começando
+---
+<p class="intro"><strong>Rust</strong> é uma linguagem de programação <strong>compilada</strong>: você escreve o código num arquivo <code>.rs</code>, o compilador confere tudo e gera um programa executável. Ela nasceu na Mozilla, ganhou a versão 1.0 em 2015 e hoje é usada em navegadores, sistemas operacionais, ferramentas de linha de comando, servidores e até no kernel do Linux.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>O que torna o Rust diferente: segurança de memória <strong>sem</strong> coletor de lixo.</li>
+<li>Quem é quem: <code>rustc</code> (o compilador), <code>cargo</code> (o gerente de projetos) e <code>rustup</code> (o instalador).</li>
+<li>Como é um programa Rust mínimo e o que acontece quando ele roda.</li>
+</ul></div>
+
+<hr>
+<h2>A ideia: um revisor muito chato, a seu favor</h2>
+<p>Imagine que cada programa que você escreve passa por um revisor antes de ir para o mundo. Em C, o revisor deixa passar quase tudo, e os erros de memória só aparecem quando o programa trava na mão do usuário. Em Python e Java, um “zelador” (o <em>coletor de lixo</em>) limpa a memória enquanto o programa roda, o que é seguro, mas custa tempo. O Rust escolheu um terceiro caminho: um revisor <strong>muito</strong> exigente na compilação, que confere quem é dono de cada pedaço de memória. Se o código passa, ele é rápido como C e não precisa de zelador.</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Linguagem</th><th>Quem cuida da memória</th><th>Consequência</th></tr>
+<tr><td>C / C++</td><td>Você, à mão</td><td>Rápido, mas fácil de errar (vazamentos, uso depois de liberar)</td></tr>
+<tr><td>Python / Java / Go</td><td>Coletor de lixo, enquanto roda</td><td>Seguro, com um custo em tempo e memória</td></tr>
+<tr><td><strong>Rust</strong></td><td>O compilador, pelas regras de <em>ownership</em></td><td>Seguro e rápido; o custo é aprender as regras</td></tr>
+</table></div>
+
+<hr>
+<h2>1. As três ferramentas</h2>
+<dl class="anatomy"><dt>rustup</dt><dd>o instalador e atualizador: baixa e troca versões do Rust.</dd><dt>rustc</dt><dd>o compilador: transforma <code>.rs</code> em executável.</dd><dt>cargo</dt><dd>o gerente de projetos: cria, compila, roda, testa e baixa bibliotecas (crates).</dd></dl>
+<p>No dia a dia você quase só usa o <code>cargo</code>, que chama o <code>rustc</code> por você. Mas vale ver o compilador sozinho uma vez. Este é o menor programa Rust que imprime alguma coisa:</p>
+::: terminal intro projeto
+$ rustc src/main.rs -o ola
+$ ./ola
+--- codigo
+fn main() {
+    println!("Olá, Rust!");
+}
+:::
+<p>O <code>rustc</code> não escreveu nada: em Rust, compilar sem erros é silencioso. Ele criou o executável <code>ola</code>, que roda sozinho, sem precisar do Rust instalado na máquina de quem for usar.</p>
+<dl class="anatomy"><dt>fn</dt><dd>declara uma função.</dd><dt>main</dt><dd>a função por onde todo programa começa.</dd><dt>println!</dt><dd>uma <em>macro</em> (repare no <code>!</code>) que imprime uma linha.</dd><dt>;</dt><dd>termina a instrução.</dd></dl>
+
+<hr>
+<h2>2. Quando dá errado: o compilador explica</h2>
+<p>Esquecer as aspas do texto é um erro comum. Veja como o compilador responde:</p>
+::: exemplo intro-erro falha
+fn main() {
+    println!(Olá, Rust!);
+}
+:::
+<p>Leia de cima para baixo: a linha <code>error:</code> diz o problema, a seta <code>--&gt;</code> diz o arquivo, a linha e a coluna (<code>src/main.rs:2:23</code>), e o desenho aponta o lugar. Sem as aspas, o compilador leu <code>Rust!</code> como se fosse outra macro e ficou esperando o <code>(</code> dela. A mensagem nem sempre adivinha a causa, mas sempre aponta onde o código deixou de fazer sentido. No fim, <code>could not compile</code> avisa que nenhum executável foi gerado. Você vai ver muitas mensagens assim neste guia, sempre reais.</p>
+
+<hr>
+<h2>3. Onde o Rust é usado</h2>
+<ul>
+<li><strong>Ferramentas de terminal:</strong> <code>ripgrep</code>, <code>fd</code>, <code>bat</code> e o próprio <code>cargo</code> são escritos em Rust.</li>
+<li><strong>Sistemas:</strong> partes do kernel do Linux e do Windows, e componentes do Android.</li>
+<li><strong>Web e rede:</strong> servidores, proxies e WebAssembly no navegador.</li>
+<li><strong>Embarcados:</strong> microcontroladores, onde não há espaço para um coletor de lixo.</li>
+</ul>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete o nome da função por onde todo programa Rust começa:
+fn [[main]]() {
+    println!("oi");
+}
+:::
+::: ex
+Qual ferramenta cria, compila e roda projetos?
+$ [[cargo]] run
+:::
+::: mc 3
+Por que o Rust não precisa de coletor de lixo?
+- Porque não usa memória dinâmica
+- Porque o sistema operacional limpa tudo no fim
+- Porque o compilador confere, pelas regras de ownership, quando cada valor pode ser liberado
+- Porque o programador chama <code>free()</code> à mão
+:::
+::: mc 2
+O que o <code>!</code> em <code>println!</code> indica?
+- Que a linha é importante
+- Que <code>println!</code> é uma macro, não uma função comum
+- Que o texto vai sair em negrito
+- Que o programa termina ali
+:::
+::: missao goal="src:println!;;out:Eu estou aprendendo Rust"
+Escreva um programa que imprima exatamente <code>Eu estou aprendendo Rust</code>.
+--- script
+fn main() {
+    // imprima a frase aqui
+}
+--- solucao
+fn main() {
+    println!("Eu estou aprendendo Rust");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Rust é compilado, rápido e seguro: o compilador confere a memória pelas regras de <em>ownership</em>.</li>
+<li><code>rustup</code> instala, <code>rustc</code> compila, <code>cargo</code> organiza o projeto.</li>
+<li>Todo programa começa em <code>fn main()</code>; <code>println!</code> é uma macro.</li>
+<li>As mensagens de erro mostram arquivo, linha, coluna e, muitas vezes, a correção.</li>
+</ul>

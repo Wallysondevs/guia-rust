@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalando o Rust com o rustup no Linux, macOS e Windows | Guia Rust</title>
+<meta name="description" content="Como instalar o Rust com o rustup, conferir as versões do rustc e do cargo, atualizar e entender onde ficam os arquivos (~/.cargo e ~/.rustup).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Instalando o Rust (<span class="hl">rustup</span>)</h1>
+
+<p class="intro">O jeito oficial de instalar o Rust é o <strong>rustup</strong>, um pequeno programa que baixa o compilador, o <code>cargo</code> e a biblioteca padrão, e depois cuida das atualizações. Ele instala tudo <strong>na sua pasta de usuário</strong>, sem precisar de administrador.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A instalar o Rust no Linux e no macOS com uma linha, e no Windows com o instalador.</li>
+<li>A conferir se deu certo com <code>rustc --version</code> e <code>cargo --version</code>.</li>
+<li>A atualizar com <code>rustup update</code> e a ver o que está instalado com <code>rustup show</code>.</li>
+</ul></div>
+<div class="note"><strong>Sobre as saídas.</strong> As saídas desta aula foram colhidas num Linux, com a usuária <code>ana</code>. No seu computador, as datas e números de versão podem ser mais novos.</div>
+
+<hr>
+<h2>1. Linux e macOS: uma linha no terminal</h2>
+<p>Abra o terminal e cole o comando do site oficial (<code>rustup.rs</code>). Ele baixa o instalador e o executa. Na coleta usamos <code>-y</code> (aceitar as opções padrão sem perguntar) e o perfil <code>minimal</code> (só o essencial). Sem essas opções, o instalador mostra um menu: aperte <kbd>Enter</kbd> para a instalação padrão.</p>
+<pre class="term" data-cwd="~">$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+info: profile set to minimal
+info: default host tuple is x86_64-unknown-linux-gnu
+info: syncing channel updates for stable-x86_64-unknown-linux-gnu
+info: latest update on 2026-11-12 for version 1.100.0 (0ef1bc386 2026-11-09)
+info: downloading 3 components
+info: default toolchain set to stable-x86_64-unknown-linux-gnu
+
+  stable-x86_64-unknown-linux-gnu installed - rustc 1.100.0 (0ef1bc386 2026-11-09)
+
+
+Rust is installed now. Great!
+
+To get started you may need to restart your current shell.
+This would reload your PATH environment variable to include
+Cargo's bin directory ($HOME/.cargo/bin).
+
+To configure your current shell, you need to source the
+corresponding env file under $HOME/.cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "$HOME/.cargo/env" # For sh/ash/dash/pdksh</pre>
+<p>Este é um <strong>trecho</strong> da saída real: cortamos as primeiras linhas, que só falavam de outra cópia do Rust que já existia naquela máquina. O recado do fim é importante: os programas ficam em <code>~/.cargo/bin</code>, e o terminal que já estava aberto ainda não sabe disso. Feche e abra o terminal de novo, ou rode a linha com o ponto:</p>
+<pre class="cmd">. "$HOME/.cargo/env"</pre>
+<dl class="anatomy"><dt>curl … https://sh.rustup.rs</dt><dd>baixa o script de instalação, só por HTTPS.</dd><dt>| sh</dt><dd>entrega o script para o shell executar.</dd><dt>-s -- -y</dt><dd>passa a opção <code>-y</code> para o instalador: sem perguntas.</dd><dt>--profile minimal</dt><dd>instala só compilador, cargo e biblioteca padrão.</dd></dl>
+<div class="tip"><strong>No Linux, falta um linker?</strong><p>O Rust usa o <em>linker</em> do sistema para montar o executável final. Se o primeiro <code>cargo run</code> reclamar de <code>linker `cc` not found</code>, instale as ferramentas de compilação: no Ubuntu e no Debian, <code>sudo apt install build-essential</code>.</p></div>
+
+<hr>
+<h2>2. Windows</h2>
+<p>No Windows, baixe o <code>rustup-init.exe</code> em <code>rustup.rs</code> e execute. O instalador pede as <strong>Build Tools do Visual Studio</strong> (o linker da Microsoft) e se oferece para instalá-las. Aceite, espere terminar e abra um terminal novo. Os comandos das próximas seções são os mesmos no Windows.</p>
+
+<hr>
+<h2>3. Conferindo a instalação</h2>
+<p>Três comandos, três versões. Se algum responder <code>command not found</code>, o <code>~/.cargo/bin</code> ainda não está no PATH: abra outro terminal.</p>
+<pre class="term" data-cwd="~">$ rustc --version
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+$ cargo --version
+cargo 1.100.0 (3acc79c0c 2026-11-05)
+$ rustup --version
+rustup 1.29.3 (edbc831ce 2026-11-02)
+info: This is the version for the rustup toolchain manager, not the rustc compiler.
+info: the currently active `rustc` version is `rustc 1.100.0 (0ef1bc386 2026-11-09)`</pre>
+<p>O <code>rustup --version</code> lembra que ele é o gerenciador, não o compilador, e diz qual <code>rustc</code> está ativo. O número entre parênteses é o código da versão e a data em que ela foi gerada.</p>
+
+<hr>
+<h2>4. O que está instalado: <code>rustup show</code></h2>
+<pre class="term" data-cwd="~">$ rustup show
+Default host: x86_64-unknown-linux-gnu
+rustup home:  /home/ana/.rustup
+
+installed toolchains
+--------------------
+stable-x86_64-unknown-linux-gnu (active, default)
+
+active toolchain
+----------------
+name: stable-x86_64-unknown-linux-gnu
+active because: it's the default toolchain
+installed targets:
+  x86_64-unknown-linux-gnu</pre>
+<p>Um <strong>toolchain</strong> é um conjunto completo (compilador, cargo e biblioteca padrão) de uma versão. O <code>stable</code> é a versão estável, lançada a cada seis semanas. Existem também o <code>beta</code> e o <code>nightly</code> (a de todo dia, com recursos experimentais). Neste guia, só o <code>stable</code>.</p>
+<div class="table-wrap"><table class="ref">
+<tr><th>Você digita</th><th>O que faz</th></tr>
+<tr><td><code>rustup update</code></td><td>Atualiza os toolchains instalados para a versão mais nova.</td></tr>
+<tr><td><code>rustup show</code></td><td>Mostra o que está instalado e qual toolchain está ativo.</td></tr>
+<tr><td><code>rustup doc</code></td><td>Abre a documentação oficial no navegador, sem internet.</td></tr>
+<tr><td><code>rustup self uninstall</code></td><td>Remove o Rust e o rustup do seu usuário.</td></tr>
+</table></div>
+
+<hr>
+<h2>5. Onde ficam os arquivos</h2>
+<ul>
+<li><code>~/.rustup</code>: os toolchains (compiladores, bibliotecas).</li>
+<li><code>~/.cargo/bin</code>: os executáveis <code>rustc</code>, <code>cargo</code>, <code>rustup</code> e os programas que você instalar com <code>cargo install</code>.</li>
+</ul>
+<pre class="term" data-cwd="~">$ ls ~/.cargo/bin
+cargo
+cargo-clippy
+cargo-fmt
+cargo-miri
+clippy-driver
+rls
+rust-analyzer
+rust-gdb
+rust-gdbgui
+rust-lldb
+rustc
+rustdoc
+rustfmt
+rustup</pre>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para ver a versão do compilador:</p><div class="ex-code">$ rustc <input data-answer="--version|-V" aria-label="resposta"></div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para atualizar o Rust:</p><div class="ex-code">$ rustup <input data-answer="update" aria-label="resposta"></div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Depois de instalar, o terminal diz <code>rustc: command not found</code>. O que fazer primeiro?</p>
+<label><input type="radio" name="q1"> Reinstalar o sistema operacional</label>
+<label><input type="radio" name="q1"> Abrir um terminal novo (ou rodar <code>. "$HOME/.cargo/env"</code>) para o PATH incluir <code>~/.cargo/bin</code></label>
+<label><input type="radio" name="q1"> Instalar o Python</label>
+<label><input type="radio" name="q1"> Trocar para o toolchain nightly</label></div>
+<div class="mc" data-answer="1"><p class="mc-q">O que é um toolchain no rustup?</p>
+<label><input type="radio" name="q2"> Um conjunto completo de compilador, cargo e biblioteca padrão de uma versão</label>
+<label><input type="radio" name="q2"> Uma biblioteca de terceiros</label>
+<label><input type="radio" name="q2"> Um editor de código</label>
+<label><input type="radio" name="q2"> Um tipo de variável</label></div>
+<div class="trycmd" data-goal="src:println!;;out:Rust instalado e funcionando!">
+<p class="try-task"><strong>Missão:</strong> Confirme que sua instalação compila e roda: crie um projeto (<code>cargo new teste</code>) e faça o programa imprimir <code>Rust instalado e funcionando!</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("Hello, world!");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    println!("Rust instalado e funcionando!");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Rust instalado e funcionando!
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Instale com o <code>rustup</code> (uma linha no Linux/macOS, <code>rustup-init.exe</code> no Windows).</li>
+<li>Confira com <code>rustc --version</code> e <code>cargo --version</code>; abra um terminal novo se não achar os comandos.</li>
+<li><code>rustup update</code> atualiza; <code>rustup show</code> mostra o que está instalado.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
