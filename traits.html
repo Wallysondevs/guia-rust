@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traits em Rust — definir, implementar, métodos padrão, impl Trait e dyn Trait | Guia Rust</title>
+<meta name="description" content="Traits em Rust: definir comportamento compartilhado, implementar para seus tipos, métodos com implementação padrão, traits da biblioteca padrão (Display), impl Trait em parâmetros, dyn Trait em vetores e o erro E0046 de método faltando.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Traits</span></h1>
+
+<p class="intro">Um <strong>trait</strong> descreve um comportamento que vários tipos podem ter: “sabe se apresentar”, “tem área”, “pode ser impresso”. Você declara os métodos no trait e cada tipo implementa do seu jeito. É parecido com <em>interfaces</em> de Java e C#.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A declarar um trait e implementá-lo com <code>impl Trait for Tipo</code>.</li>
+<li>Métodos com implementação padrão e o trait <code>Display</code> da biblioteca padrão.</li>
+<li>A aceitar “qualquer tipo que implemente o trait” com <code>impl Trait</code> e <code>dyn Trait</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Declarando e implementando</h2>
+<pre class="file" data-file="src/main.rs">trait Animal {
+    fn nome(&amp;self) -&gt; String;
+    fn som(&amp;self) -&gt; String;
+}
+
+struct Cachorro;
+struct Gato {
+    apelido: String,
+}
+
+impl Animal for Cachorro {
+    fn nome(&amp;self) -&gt; String {
+        String::from("Cachorro")
+    }
+    fn som(&amp;self) -&gt; String {
+        String::from("au au")
+    }
+}
+
+impl Animal for Gato {
+    fn nome(&amp;self) -&gt; String {
+        format!("Gato {}", self.apelido)
+    }
+    fn som(&amp;self) -&gt; String {
+        String::from("miau")
+    }
+}
+
+fn main() {
+    let c = Cachorro;
+    let g = Gato { apelido: String::from("Frajola") };
+    println!("{} faz {}", c.nome(), c.som());
+    println!("{} faz {}", g.nome(), g.som());
+}</pre>
+<pre class="term" data-cwd="~/projetos/trait">$ cargo run
+   Compiling trait v0.1.0 (/home/ana/projetos/trait)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/trait`
+Cachorro faz au au
+Gato Frajola faz miau</pre>
+
+<hr>
+<h2>2. Quando dá errado: faltou um método</h2>
+<pre class="file" data-file="src/main.rs">trait Forma {
+    fn area(&amp;self) -&gt; f64;
+    fn perimetro(&amp;self) -&gt; f64;
+}
+
+struct Quadrado(f64);
+
+impl Forma for Quadrado {
+    fn area(&amp;self) -&gt; f64 {
+        self.0 * self.0
+    }
+}
+
+fn main() {
+    println!("{}", Quadrado(2.0).area());
+}</pre>
+<pre class="term" data-cwd="~/projetos/faltou">$ cargo run
+   Compiling faltou v0.1.0 (/home/ana/projetos/faltou)
+error[E0046]: not all trait items implemented, missing: `perimetro`
+ --&gt; src/main.rs:8:1
+  |
+3 |     fn perimetro(&amp;self) -&gt; f64;
+  |     --------------------------- `perimetro` from trait
+...
+8 | impl Forma for Quadrado {
+  | ^^^^^^^^^^^^^^^^^^^^^^^ missing `perimetro` in implementation
+
+For more information about this error, try `rustc --explain E0046`.
+error: could not compile `faltou` (bin "faltou") due to 1 previous error</pre>
+<p>Erro <strong>E0046</strong>: quem implementa um trait precisa implementar <strong>todos</strong> os métodos sem implementação padrão. O compilador lista o que falta e mostra a assinatura.</p>
+
+<hr>
+<h2>3. Métodos com implementação padrão</h2>
+<pre class="file" data-file="src/main.rs">trait Apresentavel {
+    fn nome(&amp;self) -&gt; String;
+
+    fn apresentar(&amp;self) -&gt; String {
+        format!("Olá, eu sou {}!", self.nome())
+    }
+}
+
+struct Pessoa(String);
+struct Robo(u32);
+
+impl Apresentavel for Pessoa {
+    fn nome(&amp;self) -&gt; String {
+        self.0.clone()
+    }
+}
+
+impl Apresentavel for Robo {
+    fn nome(&amp;self) -&gt; String {
+        format!("RX-{}", self.0)
+    }
+    fn apresentar(&amp;self) -&gt; String {
+        format!("BIP. UNIDADE {} ATIVA.", self.nome())
+    }
+}
+
+fn main() {
+    println!("{}", Pessoa(String::from("Ana")).apresentar());
+    println!("{}", Robo(42).apresentar());
+}</pre>
+<pre class="term" data-cwd="~/projetos/padrao">$ cargo run
+   Compiling padrao v0.1.0 (/home/ana/projetos/padrao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/padrao`
+Olá, eu sou Ana!
+BIP. UNIDADE RX-42 ATIVA.</pre>
+<p>A <code>Pessoa</code> usa o <code>apresentar</code> padrão; o <code>Robo</code> substitui pelo dele.</p>
+
+<hr>
+<h2>4. Um trait da biblioteca padrão: <code>Display</code></h2>
+<p>O <code>{:?}</code> usa o trait <code>Debug</code> (que dá para derivar). O <code>{}</code> usa o <code>Display</code>, que você implementa à mão, porque só você sabe como o seu tipo deve aparecer para o usuário:</p>
+<pre class="file" data-file="src/main.rs">use std::fmt;
+
+struct Dinheiro {
+    centavos: u64,
+}
+
+impl fmt::Display for Dinheiro {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "R$ {},{:02}", self.centavos / 100, self.centavos % 100)
+    }
+}
+
+fn main() {
+    let preco = Dinheiro { centavos: 1999 };
+    println!("Preço: {preco}");
+    let texto = preco.to_string();
+    println!("{} caracteres", texto.len());
+}</pre>
+<pre class="term" data-cwd="~/projetos/display">$ cargo run
+   Compiling display v0.1.0 (/home/ana/projetos/display)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/display`
+Preço: R$ 19,99
+8 caracteres</pre>
+<p>Implementando <code>Display</code>, você ganha de brinde o método <code>to_string()</code>.</p>
+
+<hr>
+<h2>5. Aceitando qualquer tipo com o trait</h2>
+<pre class="file" data-file="src/main.rs">trait Forma {
+    fn area(&amp;self) -&gt; f64;
+    fn nome(&amp;self) -&gt; &amp;str;
+}
+
+struct Circulo(f64);
+struct Retangulo(f64, f64);
+
+impl Forma for Circulo {
+    fn area(&amp;self) -&gt; f64 { 3.14159 * self.0 * self.0 }
+    fn nome(&amp;self) -&gt; &amp;str { "círculo" }
+}
+
+impl Forma for Retangulo {
+    fn area(&amp;self) -&gt; f64 { self.0 * self.1 }
+    fn nome(&amp;self) -&gt; &amp;str { "retângulo" }
+}
+
+fn descrever(f: &amp;impl Forma) {
+    println!("{} com área {:.2}", f.nome(), f.area());
+}
+
+fn main() {
+    descrever(&amp;Circulo(1.0));
+    descrever(&amp;Retangulo(2.0, 3.0));
+
+    let formas: Vec&lt;Box&lt;dyn Forma&gt;&gt; = vec![Box::new(Circulo(2.0)), Box::new(Retangulo(1.0, 5.0))];
+    let total: f64 = formas.iter().map(|f| f.area()).sum();
+    println!("área total: {total:.2}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/impl-dyn">$ cargo run
+   Compiling impl-dyn v0.1.0 (/home/ana/projetos/impl-dyn)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/impl-dyn`
+círculo com área 3.14
+retângulo com área 6.00
+área total: 17.57</pre>
+<ul>
+<li><code>&amp;impl Forma</code>: “uma referência para qualquer tipo que implemente <code>Forma</code>”. O compilador gera uma versão da função para cada tipo usado (rápido).</li>
+<li><code>Box&lt;dyn Forma&gt;</code>: um <em>objeto de trait</em>. Permite misturar tipos diferentes no mesmo vetor; o método certo é escolhido na hora de rodar. O <code>Box</code> você estuda no Nível 3.</li>
+</ul>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para implementar o trait para o tipo:</p><div class="ex-code">impl Animal <input data-answer="for" aria-label="resposta"> Cachorro { }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o trait usado pelo marcador <code>{}</code>:</p><div class="ex-code">impl fmt::<input data-answer="Display" aria-label="resposta"> for Ponto { }</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">O que o erro E0046 indica?</p>
+<label><input type="radio" name="q1"> O trait não existe</label>
+<label><input type="radio" name="q1"> A implementação do trait não tem todos os métodos obrigatórios</label>
+<label><input type="radio" name="q1"> Há dois traits com o mesmo nome</label>
+<label><input type="radio" name="q1"> O método tem um nome errado</label></div>
+<div class="mc" data-answer="3"><p class="mc-q">Para guardar tipos diferentes que implementam <code>Forma</code> no mesmo vetor, use…</p>
+<label><input type="radio" name="q2"> <code>Vec&lt;Forma&gt;</code></label>
+<label><input type="radio" name="q2"> <code>Vec&lt;impl Forma&gt;</code></label>
+<label><input type="radio" name="q2"> <code>Vec&lt;Box&lt;dyn Forma&gt;&gt;</code></label>
+<label><input type="radio" name="q2"> Não é possível</label></div>
+<div class="trycmd" data-goal="src:trait\s+Veiculo;;src:impl\s+Veiculo\s+for;;out:Bicicleta: 2 rodas;;out:Carro: 4 rodas">
+<p class="try-task"><strong>Missão:</strong> Crie o trait <code>Veiculo</code> com <code>fn rodas(&amp;self) -&gt; u32</code> e <code>fn nome(&amp;self) -&gt; String</code>. Implemente para <code>Bicicleta</code> e <code>Carro</code> e imprima <code>Bicicleta: 2 rodas</code> e <code>Carro: 4 rodas</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Bicicleta;
+struct Carro;
+
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+trait Veiculo {
+    fn rodas(&amp;self) -&gt; u32;
+    fn nome(&amp;self) -&gt; String;
+}
+
+struct Bicicleta;
+struct Carro;
+
+impl Veiculo for Bicicleta {
+    fn rodas(&amp;self) -&gt; u32 { 2 }
+    fn nome(&amp;self) -&gt; String { String::from("Bicicleta") }
+}
+
+impl Veiculo for Carro {
+    fn rodas(&amp;self) -&gt; u32 { 4 }
+    fn nome(&amp;self) -&gt; String { String::from("Carro") }
+}
+
+fn main() {
+    println!("{}: {} rodas", Bicicleta.nome(), Bicicleta.rodas());
+    println!("{}: {} rodas", Carro.nome(), Carro.rodas());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+Bicicleta: 2 rodas
+Carro: 4 rodas
+</pre>
+</div>
+<div class="trycmd" data-goal="src:impl\s+(fmt::|std::fmt::)?Display\s+for\s+Hora;;out:Agora são 09:05">
+<p class="try-task"><strong>Missão:</strong> Implemente <code>Display</code> para <code>struct Hora { h: u8, m: u8 }</code>, mostrando sempre dois dígitos (<code>{:02}</code>). Imprima <code>Agora são 09:05</code> com <code>println!("Agora são {}", hora)</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::fmt;
+
+struct Hora {
+    h: u8,
+    m: u8,
+}
+
+fn main() {
+    let hora = Hora { h: 9, m: 5 };
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::fmt;
+
+struct Hora {
+    h: u8,
+    m: u8,
+}
+
+impl fmt::Display for Hora {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "{:02}:{:02}", self.h, self.m)
+    }
+}
+
+fn main() {
+    let hora = Hora { h: 9, m: 5 };
+    println!("Agora são {}", hora);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Agora são 09:05
+</pre>
+</div>
+<div class="trycmd" data-goal="src:Box&lt;dyn\s+\w+&gt;;;out:Total do carrinho: 37.5">
+<p class="try-task"><strong>Missão:</strong> Crie o trait <code>Item</code> com <code>fn preco(&amp;self) -&gt; f64</code>, implemente para <code>Livro(f64)</code> e <code>Caneta</code> (sempre 2.5), guarde <code>Livro(35.0)</code> e <code>Caneta</code> num <code>Vec&lt;Box&lt;dyn Item&gt;&gt;</code> e imprima <code>Total do carrinho: 37.5</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Livro(f64);
+struct Caneta;
+
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+trait Item {
+    fn preco(&amp;self) -&gt; f64;
+}
+
+struct Livro(f64);
+struct Caneta;
+
+impl Item for Livro {
+    fn preco(&amp;self) -&gt; f64 { self.0 }
+}
+
+impl Item for Caneta {
+    fn preco(&amp;self) -&gt; f64 { 2.5 }
+}
+
+fn main() {
+    let carrinho: Vec&lt;Box&lt;dyn Item&gt;&gt; = vec![Box::new(Livro(35.0)), Box::new(Caneta)];
+    let total: f64 = carrinho.iter().map(|i| i.preco()).sum();
+    println!("Total do carrinho: {total}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+Total do carrinho: 37.5
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>trait Nome { fn metodo(&amp;self); }</code> declara; <code>impl Nome for Tipo { … }</code> implementa.</li>
+<li>Faltar método obrigatório é o E0046; métodos podem ter implementação padrão.</li>
+<li><code>Display</code> controla o <code>{}</code> e dá o <code>to_string()</code>.</li>
+<li><code>impl Trait</code> aceita qualquer tipo com o trait; <code>Box&lt;dyn Trait&gt;</code> mistura tipos diferentes.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

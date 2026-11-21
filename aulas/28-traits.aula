@@ -1,0 +1,304 @@
+---
+slug: traits
+menu: Traits
+titulo: Traits em Rust — definir, implementar, métodos padrão, impl Trait e dyn Trait | Guia Rust
+desc: Traits em Rust: definir comportamento compartilhado, implementar para seus tipos, métodos com implementação padrão, traits da biblioteca padrão (Display), impl Trait em parâmetros, dyn Trait em vetores e o erro E0046 de método faltando.
+h1: <span class="hl">Traits</span>
+nivel: n2
+grupo: Abstração
+---
+<p class="intro">Um <strong>trait</strong> descreve um comportamento que vários tipos podem ter: “sabe se apresentar”, “tem área”, “pode ser impresso”. Você declara os métodos no trait e cada tipo implementa do seu jeito. É parecido com <em>interfaces</em> de Java e C#.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A declarar um trait e implementá-lo com <code>impl Trait for Tipo</code>.</li>
+<li>Métodos com implementação padrão e o trait <code>Display</code> da biblioteca padrão.</li>
+<li>A aceitar “qualquer tipo que implemente o trait” com <code>impl Trait</code> e <code>dyn Trait</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Declarando e implementando</h2>
+::: exemplo trait
+trait Animal {
+    fn nome(&self) -> String;
+    fn som(&self) -> String;
+}
+
+struct Cachorro;
+struct Gato {
+    apelido: String,
+}
+
+impl Animal for Cachorro {
+    fn nome(&self) -> String {
+        String::from("Cachorro")
+    }
+    fn som(&self) -> String {
+        String::from("au au")
+    }
+}
+
+impl Animal for Gato {
+    fn nome(&self) -> String {
+        format!("Gato {}", self.apelido)
+    }
+    fn som(&self) -> String {
+        String::from("miau")
+    }
+}
+
+fn main() {
+    let c = Cachorro;
+    let g = Gato { apelido: String::from("Frajola") };
+    println!("{} faz {}", c.nome(), c.som());
+    println!("{} faz {}", g.nome(), g.som());
+}
+:::
+
+<hr>
+<h2>2. Quando dá errado: faltou um método</h2>
+::: exemplo faltou falha
+trait Forma {
+    fn area(&self) -> f64;
+    fn perimetro(&self) -> f64;
+}
+
+struct Quadrado(f64);
+
+impl Forma for Quadrado {
+    fn area(&self) -> f64 {
+        self.0 * self.0
+    }
+}
+
+fn main() {
+    println!("{}", Quadrado(2.0).area());
+}
+:::
+<p>Erro <strong>E0046</strong>: quem implementa um trait precisa implementar <strong>todos</strong> os métodos sem implementação padrão. O compilador lista o que falta e mostra a assinatura.</p>
+
+<hr>
+<h2>3. Métodos com implementação padrão</h2>
+::: exemplo padrao
+trait Apresentavel {
+    fn nome(&self) -> String;
+
+    fn apresentar(&self) -> String {
+        format!("Olá, eu sou {}!", self.nome())
+    }
+}
+
+struct Pessoa(String);
+struct Robo(u32);
+
+impl Apresentavel for Pessoa {
+    fn nome(&self) -> String {
+        self.0.clone()
+    }
+}
+
+impl Apresentavel for Robo {
+    fn nome(&self) -> String {
+        format!("RX-{}", self.0)
+    }
+    fn apresentar(&self) -> String {
+        format!("BIP. UNIDADE {} ATIVA.", self.nome())
+    }
+}
+
+fn main() {
+    println!("{}", Pessoa(String::from("Ana")).apresentar());
+    println!("{}", Robo(42).apresentar());
+}
+:::
+<p>A <code>Pessoa</code> usa o <code>apresentar</code> padrão; o <code>Robo</code> substitui pelo dele.</p>
+
+<hr>
+<h2>4. Um trait da biblioteca padrão: <code>Display</code></h2>
+<p>O <code>{:?}</code> usa o trait <code>Debug</code> (que dá para derivar). O <code>{}</code> usa o <code>Display</code>, que você implementa à mão, porque só você sabe como o seu tipo deve aparecer para o usuário:</p>
+::: exemplo display
+use std::fmt;
+
+struct Dinheiro {
+    centavos: u64,
+}
+
+impl fmt::Display for Dinheiro {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "R$ {},{:02}", self.centavos / 100, self.centavos % 100)
+    }
+}
+
+fn main() {
+    let preco = Dinheiro { centavos: 1999 };
+    println!("Preço: {preco}");
+    let texto = preco.to_string();
+    println!("{} caracteres", texto.len());
+}
+:::
+<p>Implementando <code>Display</code>, você ganha de brinde o método <code>to_string()</code>.</p>
+
+<hr>
+<h2>5. Aceitando qualquer tipo com o trait</h2>
+::: exemplo impl-dyn
+trait Forma {
+    fn area(&self) -> f64;
+    fn nome(&self) -> &str;
+}
+
+struct Circulo(f64);
+struct Retangulo(f64, f64);
+
+impl Forma for Circulo {
+    fn area(&self) -> f64 { 3.14159 * self.0 * self.0 }
+    fn nome(&self) -> &str { "círculo" }
+}
+
+impl Forma for Retangulo {
+    fn area(&self) -> f64 { self.0 * self.1 }
+    fn nome(&self) -> &str { "retângulo" }
+}
+
+fn descrever(f: &impl Forma) {
+    println!("{} com área {:.2}", f.nome(), f.area());
+}
+
+fn main() {
+    descrever(&Circulo(1.0));
+    descrever(&Retangulo(2.0, 3.0));
+
+    let formas: Vec<Box<dyn Forma>> = vec![Box::new(Circulo(2.0)), Box::new(Retangulo(1.0, 5.0))];
+    let total: f64 = formas.iter().map(|f| f.area()).sum();
+    println!("área total: {total:.2}");
+}
+:::
+<ul>
+<li><code>&amp;impl Forma</code>: “uma referência para qualquer tipo que implemente <code>Forma</code>”. O compilador gera uma versão da função para cada tipo usado (rápido).</li>
+<li><code>Box&lt;dyn Forma&gt;</code>: um <em>objeto de trait</em>. Permite misturar tipos diferentes no mesmo vetor; o método certo é escolhido na hora de rodar. O <code>Box</code> você estuda no Nível 3.</li>
+</ul>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para implementar o trait para o tipo:
+impl Animal [[for]] Cachorro { }
+:::
+::: ex
+Complete o trait usado pelo marcador <code>{}</code>:
+impl fmt::[[Display]] for Ponto { }
+:::
+::: mc 2
+O que o erro E0046 indica?
+- O trait não existe
+- A implementação do trait não tem todos os métodos obrigatórios
+- Há dois traits com o mesmo nome
+- O método tem um nome errado
+:::
+::: mc 3
+Para guardar tipos diferentes que implementam <code>Forma</code> no mesmo vetor, use…
+- <code>Vec&lt;Forma&gt;</code>
+- <code>Vec&lt;impl Forma&gt;</code>
+- <code>Vec&lt;Box&lt;dyn Forma&gt;&gt;</code>
+- Não é possível
+:::
+::: missao goal="src:trait\s+Veiculo;;src:impl\s+Veiculo\s+for;;out:Bicicleta: 2 rodas;;out:Carro: 4 rodas"
+Crie o trait <code>Veiculo</code> com <code>fn rodas(&amp;self) -&gt; u32</code> e <code>fn nome(&amp;self) -&gt; String</code>. Implemente para <code>Bicicleta</code> e <code>Carro</code> e imprima <code>Bicicleta: 2 rodas</code> e <code>Carro: 4 rodas</code>.
+--- script
+struct Bicicleta;
+struct Carro;
+
+fn main() {
+}
+--- solucao
+trait Veiculo {
+    fn rodas(&self) -> u32;
+    fn nome(&self) -> String;
+}
+
+struct Bicicleta;
+struct Carro;
+
+impl Veiculo for Bicicleta {
+    fn rodas(&self) -> u32 { 2 }
+    fn nome(&self) -> String { String::from("Bicicleta") }
+}
+
+impl Veiculo for Carro {
+    fn rodas(&self) -> u32 { 4 }
+    fn nome(&self) -> String { String::from("Carro") }
+}
+
+fn main() {
+    println!("{}: {} rodas", Bicicleta.nome(), Bicicleta.rodas());
+    println!("{}: {} rodas", Carro.nome(), Carro.rodas());
+}
+:::
+::: missao goal="src:impl\s+(fmt::|std::fmt::)?Display\s+for\s+Hora;;out:Agora são 09:05"
+Implemente <code>Display</code> para <code>struct Hora { h: u8, m: u8 }</code>, mostrando sempre dois dígitos (<code>{:02}</code>). Imprima <code>Agora são 09:05</code> com <code>println!("Agora são {}", hora)</code>.
+--- script
+use std::fmt;
+
+struct Hora {
+    h: u8,
+    m: u8,
+}
+
+fn main() {
+    let hora = Hora { h: 9, m: 5 };
+}
+--- solucao
+use std::fmt;
+
+struct Hora {
+    h: u8,
+    m: u8,
+}
+
+impl fmt::Display for Hora {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:02}:{:02}", self.h, self.m)
+    }
+}
+
+fn main() {
+    let hora = Hora { h: 9, m: 5 };
+    println!("Agora são {}", hora);
+}
+:::
+::: missao goal="src:Box<dyn\s+\w+>;;out:Total do carrinho: 37.5"
+Crie o trait <code>Item</code> com <code>fn preco(&amp;self) -&gt; f64</code>, implemente para <code>Livro(f64)</code> e <code>Caneta</code> (sempre 2.5), guarde <code>Livro(35.0)</code> e <code>Caneta</code> num <code>Vec&lt;Box&lt;dyn Item&gt;&gt;</code> e imprima <code>Total do carrinho: 37.5</code>.
+--- script
+struct Livro(f64);
+struct Caneta;
+
+fn main() {
+}
+--- solucao
+trait Item {
+    fn preco(&self) -> f64;
+}
+
+struct Livro(f64);
+struct Caneta;
+
+impl Item for Livro {
+    fn preco(&self) -> f64 { self.0 }
+}
+
+impl Item for Caneta {
+    fn preco(&self) -> f64 { 2.5 }
+}
+
+fn main() {
+    let carrinho: Vec<Box<dyn Item>> = vec![Box::new(Livro(35.0)), Box::new(Caneta)];
+    let total: f64 = carrinho.iter().map(|i| i.preco()).sum();
+    println!("Total do carrinho: {total}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>trait Nome { fn metodo(&amp;self); }</code> declara; <code>impl Nome for Tipo { … }</code> implementa.</li>
+<li>Faltar método obrigatório é o E0046; métodos podem ter implementação padrão.</li>
+<li><code>Display</code> controla o <code>{}</code> e dá o <code>to_string()</code>.</li>
+<li><code>impl Trait</code> aceita qualquer tipo com o trait; <code>Box&lt;dyn Trait&gt;</code> mistura tipos diferentes.</li>
+</ul>

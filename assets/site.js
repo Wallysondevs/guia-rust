@@ -47,6 +47,10 @@ var NIVEIS = [
     { grupo: "Organizando o Código", itens: [
       ["modulos.html", "Módulos (mod, pub, use)"],
       ["crates.html", "Crates e dependências"]
+    ]},
+    { grupo: "Abstração", itens: [
+      ["traits.html", "Traits"],
+      ["generics.html", "Generics"]
     ]}
   ]}
 ];

@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generics em Rust — funções, structs e enums genéricos, trait bounds e where | Guia Rust</title>
+<meta name="description" content="Generics em Rust: funções que servem para vários tipos com &lt;T&gt;, restrições com trait bounds (T: PartialOrd), a cláusula where, structs e impl genéricos, e o erro E0369 quando falta a restrição.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Generics</span></h1>
+
+<p class="intro"><strong>Generics</strong> (tipos genéricos) deixam você escrever uma função ou struct uma vez só e usá-la com vários tipos. Você já usou muitos: <code>Vec&lt;T&gt;</code>, <code>Option&lt;T&gt;</code>, <code>Result&lt;T, E&gt;</code>. O <code>T</code> é um “tipo a definir”, que o compilador troca pelo tipo de verdade em cada uso.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A escrever funções genéricas com <code>&lt;T&gt;</code> e a restringir <code>T</code> com traits (<em>trait bounds</em>).</li>
+<li>O erro real quando falta a restrição, e a cláusula <code>where</code>.</li>
+<li>Structs e blocos <code>impl</code> genéricos.</li>
+</ul></div>
+
+<hr>
+<h2>1. O problema: código repetido</h2>
+<p>Sem generics, achar o maior de uma lista exige uma função por tipo:</p>
+<pre class="file" data-file="src/main.rs">fn maior_i32(lista: &amp;[i32]) -&gt; i32 { /* … */ }
+fn maior_f64(lista: &amp;[f64]) -&gt; f64 { /* … o mesmo código … */ }
+fn maior_char(lista: &amp;[char]) -&gt; char { /* … de novo … */ }</pre>
+
+<hr>
+<h2>2. Uma função genérica (e o erro de primeira)</h2>
+<pre class="file" data-file="src/main.rs">fn maior&lt;T&gt;(lista: &amp;[T]) -&gt; &amp;T {
+    let mut maior = &amp;lista[0];
+    for item in lista {
+        if item &gt; maior {
+            maior = item;
+        }
+    }
+    maior
+}
+
+fn main() {
+    println!("{}", maior(&amp;[34, 50, 25]));
+}</pre>
+<pre class="term" data-cwd="~/projetos/sem-bound">$ cargo run
+   Compiling sem-bound v0.1.0 (/home/ana/projetos/sem-bound)
+error[E0369]: binary operation `&gt;` cannot be applied to type `&amp;T`
+ --&gt; src/main.rs:4:17
+  |
+4 |         if item &gt; maior {
+  |            ---- ^ ----- &amp;T
+  |            |
+  |            &amp;T
+  |
+help: consider restricting type parameter `T` with trait `PartialOrd`
+  |
+1 | fn maior&lt;T: std::cmp::PartialOrd&gt;(lista: &amp;[T]) -&gt; &amp;T {
+  |           ++++++++++++++++++++++
+
+For more information about this error, try `rustc --explain E0369`.
+error: could not compile `sem-bound` (bin "sem-bound") due to 1 previous error</pre>
+<p>O compilador não deixa: um <code>T</code> qualquer pode não saber se comparar com <code>&gt;</code>. O <code>help</code> diz a solução: exigir que <code>T</code> implemente <code>PartialOrd</code> (o trait das comparações <code>&lt;</code> e <code>&gt;</code>).</p>
+<pre class="file" data-file="src/main.rs">fn maior&lt;T: PartialOrd&gt;(lista: &amp;[T]) -&gt; &amp;T {
+    let mut maior = &amp;lista[0];
+    for item in lista {
+        if item &gt; maior {
+            maior = item;
+        }
+    }
+    maior
+}
+
+fn main() {
+    println!("{}", maior(&amp;[34, 50, 25]));
+    println!("{}", maior(&amp;[1.5, 0.2, 9.9]));
+    println!("{}", maior(&amp;['r', 'u', 's', 't']));
+    println!("{}", maior(&amp;["pera", "uva", "abacaxi"]));
+}</pre>
+<pre class="term" data-cwd="~/projetos/com-bound">$ cargo run
+   Compiling com-bound v0.1.0 (/home/ana/projetos/com-bound)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/com-bound`
+50
+9.9
+u
+uva</pre>
+<dl class="anatomy"><dt>fn maior</dt><dd>o nome.</dd><dt>&lt;T: PartialOrd&gt;</dt><dd>declara o tipo genérico <code>T</code>, que precisa saber se comparar.</dd><dt>(lista: &amp;[T])</dt><dd>uma fatia de <code>T</code>.</dd><dt>-&gt; &amp;T</dt><dd>devolve uma referência para um <code>T</code>.</dd></dl>
+<p>Textos são comparados em ordem alfabética (por bytes), por isso <code>"uva"</code> é o “maior”.</p>
+
+<hr>
+<h2>3. Várias restrições e <code>where</code></h2>
+<pre class="file" data-file="src/main.rs">use std::fmt::Display;
+
+fn mostrar_maior&lt;T&gt;(a: T, b: T)
+where
+    T: PartialOrd + Display,
+{
+    if a &gt; b {
+        println!("{a} é maior que {b}");
+    } else {
+        println!("{b} é maior ou igual a {a}");
+    }
+}
+
+fn main() {
+    mostrar_maior(3, 7);
+    mostrar_maior("zebra", "abelha");
+}</pre>
+<pre class="term" data-cwd="~/projetos/where">$ cargo run
+   Compiling where v0.1.0 (/home/ana/projetos/where)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/where`
+7 é maior ou igual a 3
+zebra é maior que abelha</pre>
+<p><code>T: PartialOrd + Display</code> exige os dois traits. Quando as restrições ficam longas, a cláusula <code>where</code> depois da assinatura deixa tudo mais legível.</p>
+
+<hr>
+<h2>4. Structs e <code>impl</code> genéricos</h2>
+<pre class="file" data-file="src/main.rs">#[derive(Debug)]
+struct Par&lt;T&gt; {
+    a: T,
+    b: T,
+}
+
+impl&lt;T: PartialOrd + Copy&gt; Par&lt;T&gt; {
+    fn maior(&amp;self) -&gt; T {
+        if self.a &gt; self.b { self.a } else { self.b }
+    }
+}
+
+impl Par&lt;f64&gt; {
+    fn media(&amp;self) -&gt; f64 {
+        (self.a + self.b) / 2.0
+    }
+}
+
+#[derive(Debug)]
+struct Caixa&lt;T, U&gt; {
+    rotulo: T,
+    conteudo: U,
+}
+
+fn main() {
+    let p = Par { a: 3, b: 9 };
+    println!("{:?}: maior {}", p, p.maior());
+    let q = Par { a: 2.0, b: 5.0 };
+    println!("maior {}, média {}", q.maior(), q.media());
+    let c = Caixa { rotulo: "nota", conteudo: 9.5 };
+    println!("{:?}", c);
+    println!("{} = {}", c.rotulo, c.conteudo);
+}</pre>
+<pre class="term" data-cwd="~/projetos/struct-generica">$ cargo run
+   Compiling struct-generica v0.1.0 (/home/ana/projetos/struct-generica)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/struct-generica`
+Par { a: 3, b: 9 }: maior 9
+maior 5, média 3.5
+Caixa { rotulo: "nota", conteudo: 9.5 }
+nota = 9.5</pre>
+<p>O <code>impl&lt;T: …&gt; Par&lt;T&gt;</code> vale para todo <code>Par</code> cujo <code>T</code> cumpra as restrições. Já o <code>impl Par&lt;f64&gt;</code> só existe para <code>Par</code> de <code>f64</code>: um <code>Par&lt;i32&gt;</code> não tem <code>media</code>. A <code>Caixa</code> mostra que dá para ter mais de um tipo genérico.</p>
+<div class="tip"><strong>Generics não custam nada na execução</strong><p>O compilador gera uma cópia da função para cada tipo usado (<em>monomorfização</em>). <code>maior::&lt;i32&gt;</code> e <code>maior::&lt;f64&gt;</code> viram duas funções normais, tão rápidas quanto se você tivesse escrito cada uma.</p></div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para declarar o tipo genérico:</p><div class="ex-code">fn primeiro<input data-answer="&lt;T&gt;" aria-label="resposta">(lista: &amp;[T]) -&gt; &amp;T { &amp;lista[0] }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete a restrição para poder imprimir com <code>{}</code>:</p><div class="ex-code">fn mostrar&lt;T: <input data-answer="Display" aria-label="resposta">&gt;(x: T) { println!("{x}"); }</div></div>
+<div class="mc" data-answer="1"><p class="mc-q">Por que <code>fn maior&lt;T&gt;(a: T, b: T)</code> não pode usar <code>a &gt; b</code> sem restrição?</p>
+<label><input type="radio" name="q1"> Porque nem todo tipo sabe se comparar; é preciso exigir <code>T: PartialOrd</code></label>
+<label><input type="radio" name="q1"> Porque generics não aceitam operadores</label>
+<label><input type="radio" name="q1"> Porque falta <code>mut</code></label>
+<label><input type="radio" name="q1"> Porque <code>T</code> é sempre texto</label></div>
+<div class="mc" data-answer="3"><p class="mc-q">O que <code>impl Par&lt;f64&gt; { fn media… }</code> significa?</p>
+<label><input type="radio" name="q2"> Todo <code>Par</code> ganha <code>media</code></label>
+<label><input type="radio" name="q2"> É um erro: impl precisa de <code>&lt;T&gt;</code></label>
+<label><input type="radio" name="q2"> Só <code>Par&lt;f64&gt;</code> tem o método <code>media</code></label>
+<label><input type="radio" name="q2"> <code>media</code> converte qualquer tipo em <code>f64</code></label></div>
+<div class="trycmd" data-goal="src:fn\s+menor\s*&lt;\s*T\s*:\s*PartialOrd;;out:menor: 2;;out:menor: banana">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn menor&lt;T: PartialOrd&gt;(a: T, b: T) -&gt; T</code>. Teste com números e textos e imprima <code>menor: 2</code> (de 7 e 2) e <code>menor: banana</code> (de <code>"maçã"</code> e <code>"banana"</code>).</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn menor&lt;T: PartialOrd&gt;(a: T, b: T) -&gt; T {
+    if a &lt; b { a } else { b }
+}
+
+fn main() {
+    println!("menor: {}", menor(7, 2));
+    println!("menor: {}", menor("maçã", "banana"));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+menor: 2
+menor: banana
+</pre>
+</div>
+<div class="trycmd" data-goal="src:struct\s+Pilha\s*&lt;\s*T\s*&gt;;;src:impl\s*&lt;\s*T\s*&gt;\s*Pilha\s*&lt;\s*T\s*&gt;;;out:topo: Some(30);;out:tamanho: 2">
+<p class="try-task"><strong>Missão:</strong> Crie <code>struct Pilha&lt;T&gt; { itens: Vec&lt;T&gt; }</code> com <code>new</code>, <code>empilhar(&amp;mut self, x: T)</code> e <code>desempilhar(&amp;mut self) -&gt; Option&lt;T&gt;</code>. Empilhe 10, 20, 30, desempilhe uma vez e imprima <code>topo: Some(30)</code> e <code>tamanho: 2</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Pilha&lt;T&gt; {
+    itens: Vec&lt;T&gt;,
+}
+
+impl&lt;T&gt; Pilha&lt;T&gt; {
+    fn new() -&gt; Self {
+        Pilha { itens: Vec::new() }
+    }
+    fn empilhar(&amp;mut self, x: T) {
+        self.itens.push(x);
+    }
+    fn desempilhar(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.itens.pop()
+    }
+}
+
+fn main() {
+    let mut p = Pilha::new();
+    p.empilhar(10);
+    p.empilhar(20);
+    p.empilhar(30);
+    println!("topo: {:?}", p.desempilhar());
+    println!("tamanho: {}", p.itens.len());
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+topo: Some(30)
+tamanho: 2
+</pre>
+</div>
+<div class="trycmd" data-goal="src:where;;src:Display;;out:[1] [2] [3];;out:[a] [b]">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn colchetes&lt;T&gt;(v: &amp;[T]) -&gt; String</code> com <code>where T: Display</code>, que devolve cada item entre colchetes separados por espaço. Imprima para <code>[1, 2, 3]</code> e <code>['a', 'b']</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::fmt::Display;
+
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::fmt::Display;
+
+fn colchetes&lt;T&gt;(v: &amp;[T]) -&gt; String
+where
+    T: Display,
+{
+    v.iter().map(|x| format!("[{x}]")).collect::&lt;Vec&lt;_&gt;&gt;().join(" ")
+}
+
+fn main() {
+    println!("{}", colchetes(&amp;[1, 2, 3]));
+    println!("{}", colchetes(&amp;['a', 'b']));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/missao`
+[1] [2] [3]
+[a] [b]
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>fn f&lt;T&gt;(x: T)</code>, <code>struct S&lt;T&gt;</code>, <code>impl&lt;T&gt; S&lt;T&gt;</code> declaram generics.</li>
+<li>Restrinja com traits: <code>T: PartialOrd + Display</code>, ou com <code>where</code>.</li>
+<li>Sem a restrição, o compilador recusa operações que <code>T</code> pode não ter.</li>
+<li>Generics são resolvidos na compilação: zero custo na execução.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

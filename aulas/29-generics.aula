@@ -1,0 +1,226 @@
+---
+slug: generics
+menu: Generics
+titulo: Generics em Rust — funções, structs e enums genéricos, trait bounds e where | Guia Rust
+desc: Generics em Rust: funções que servem para vários tipos com <T>, restrições com trait bounds (T: PartialOrd), a cláusula where, structs e impl genéricos, e o erro E0369 quando falta a restrição.
+h1: <span class="hl">Generics</span>
+nivel: n2
+grupo: Abstração
+---
+<p class="intro"><strong>Generics</strong> (tipos genéricos) deixam você escrever uma função ou struct uma vez só e usá-la com vários tipos. Você já usou muitos: <code>Vec&lt;T&gt;</code>, <code>Option&lt;T&gt;</code>, <code>Result&lt;T, E&gt;</code>. O <code>T</code> é um “tipo a definir”, que o compilador troca pelo tipo de verdade em cada uso.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A escrever funções genéricas com <code>&lt;T&gt;</code> e a restringir <code>T</code> com traits (<em>trait bounds</em>).</li>
+<li>O erro real quando falta a restrição, e a cláusula <code>where</code>.</li>
+<li>Structs e blocos <code>impl</code> genéricos.</li>
+</ul></div>
+
+<hr>
+<h2>1. O problema: código repetido</h2>
+<p>Sem generics, achar o maior de uma lista exige uma função por tipo:</p>
+<pre class="file" data-file="src/main.rs">fn maior_i32(lista: &amp;[i32]) -&gt; i32 { /* … */ }
+fn maior_f64(lista: &amp;[f64]) -&gt; f64 { /* … o mesmo código … */ }
+fn maior_char(lista: &amp;[char]) -&gt; char { /* … de novo … */ }</pre>
+
+<hr>
+<h2>2. Uma função genérica (e o erro de primeira)</h2>
+::: exemplo sem-bound falha
+fn maior<T>(lista: &[T]) -> &T {
+    let mut maior = &lista[0];
+    for item in lista {
+        if item > maior {
+            maior = item;
+        }
+    }
+    maior
+}
+
+fn main() {
+    println!("{}", maior(&[34, 50, 25]));
+}
+:::
+<p>O compilador não deixa: um <code>T</code> qualquer pode não saber se comparar com <code>&gt;</code>. O <code>help</code> diz a solução: exigir que <code>T</code> implemente <code>PartialOrd</code> (o trait das comparações <code>&lt;</code> e <code>&gt;</code>).</p>
+::: exemplo com-bound
+fn maior<T: PartialOrd>(lista: &[T]) -> &T {
+    let mut maior = &lista[0];
+    for item in lista {
+        if item > maior {
+            maior = item;
+        }
+    }
+    maior
+}
+
+fn main() {
+    println!("{}", maior(&[34, 50, 25]));
+    println!("{}", maior(&[1.5, 0.2, 9.9]));
+    println!("{}", maior(&['r', 'u', 's', 't']));
+    println!("{}", maior(&["pera", "uva", "abacaxi"]));
+}
+:::
+<dl class="anatomy"><dt>fn maior</dt><dd>o nome.</dd><dt>&lt;T: PartialOrd&gt;</dt><dd>declara o tipo genérico <code>T</code>, que precisa saber se comparar.</dd><dt>(lista: &amp;[T])</dt><dd>uma fatia de <code>T</code>.</dd><dt>-&gt; &amp;T</dt><dd>devolve uma referência para um <code>T</code>.</dd></dl>
+<p>Textos são comparados em ordem alfabética (por bytes), por isso <code>"uva"</code> é o “maior”.</p>
+
+<hr>
+<h2>3. Várias restrições e <code>where</code></h2>
+::: exemplo where
+use std::fmt::Display;
+
+fn mostrar_maior<T>(a: T, b: T)
+where
+    T: PartialOrd + Display,
+{
+    if a > b {
+        println!("{a} é maior que {b}");
+    } else {
+        println!("{b} é maior ou igual a {a}");
+    }
+}
+
+fn main() {
+    mostrar_maior(3, 7);
+    mostrar_maior("zebra", "abelha");
+}
+:::
+<p><code>T: PartialOrd + Display</code> exige os dois traits. Quando as restrições ficam longas, a cláusula <code>where</code> depois da assinatura deixa tudo mais legível.</p>
+
+<hr>
+<h2>4. Structs e <code>impl</code> genéricos</h2>
+::: exemplo struct-generica
+#[derive(Debug)]
+struct Par<T> {
+    a: T,
+    b: T,
+}
+
+impl<T: PartialOrd + Copy> Par<T> {
+    fn maior(&self) -> T {
+        if self.a > self.b { self.a } else { self.b }
+    }
+}
+
+impl Par<f64> {
+    fn media(&self) -> f64 {
+        (self.a + self.b) / 2.0
+    }
+}
+
+#[derive(Debug)]
+struct Caixa<T, U> {
+    rotulo: T,
+    conteudo: U,
+}
+
+fn main() {
+    let p = Par { a: 3, b: 9 };
+    println!("{:?}: maior {}", p, p.maior());
+    let q = Par { a: 2.0, b: 5.0 };
+    println!("maior {}, média {}", q.maior(), q.media());
+    let c = Caixa { rotulo: "nota", conteudo: 9.5 };
+    println!("{:?}", c);
+    println!("{} = {}", c.rotulo, c.conteudo);
+}
+:::
+<p>O <code>impl&lt;T: …&gt; Par&lt;T&gt;</code> vale para todo <code>Par</code> cujo <code>T</code> cumpra as restrições. Já o <code>impl Par&lt;f64&gt;</code> só existe para <code>Par</code> de <code>f64</code>: um <code>Par&lt;i32&gt;</code> não tem <code>media</code>. A <code>Caixa</code> mostra que dá para ter mais de um tipo genérico.</p>
+<div class="tip"><strong>Generics não custam nada na execução</strong><p>O compilador gera uma cópia da função para cada tipo usado (<em>monomorfização</em>). <code>maior::&lt;i32&gt;</code> e <code>maior::&lt;f64&gt;</code> viram duas funções normais, tão rápidas quanto se você tivesse escrito cada uma.</p></div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para declarar o tipo genérico:
+fn primeiro[[<T>]](lista: &[T]) -> &T { &lista[0] }
+:::
+::: ex
+Complete a restrição para poder imprimir com <code>{}</code>:
+fn mostrar<T: [[Display]]>(x: T) { println!("{x}"); }
+:::
+::: mc 1
+Por que <code>fn maior&lt;T&gt;(a: T, b: T)</code> não pode usar <code>a &gt; b</code> sem restrição?
+- Porque nem todo tipo sabe se comparar; é preciso exigir <code>T: PartialOrd</code>
+- Porque generics não aceitam operadores
+- Porque falta <code>mut</code>
+- Porque <code>T</code> é sempre texto
+:::
+::: mc 3
+O que <code>impl Par&lt;f64&gt; { fn media… }</code> significa?
+- Todo <code>Par</code> ganha <code>media</code>
+- É um erro: impl precisa de <code>&lt;T&gt;</code>
+- Só <code>Par&lt;f64&gt;</code> tem o método <code>media</code>
+- <code>media</code> converte qualquer tipo em <code>f64</code>
+:::
+::: missao goal="src:fn\s+menor\s*<\s*T\s*:\s*PartialOrd;;out:menor: 2;;out:menor: banana"
+Escreva <code>fn menor&lt;T: PartialOrd&gt;(a: T, b: T) -&gt; T</code>. Teste com números e textos e imprima <code>menor: 2</code> (de 7 e 2) e <code>menor: banana</code> (de <code>"maçã"</code> e <code>"banana"</code>).
+--- script
+fn main() {
+}
+--- solucao
+fn menor<T: PartialOrd>(a: T, b: T) -> T {
+    if a < b { a } else { b }
+}
+
+fn main() {
+    println!("menor: {}", menor(7, 2));
+    println!("menor: {}", menor("maçã", "banana"));
+}
+:::
+::: missao goal="src:struct\s+Pilha\s*<\s*T\s*>;;src:impl\s*<\s*T\s*>\s*Pilha\s*<\s*T\s*>;;out:topo: Some(30);;out:tamanho: 2"
+Crie <code>struct Pilha&lt;T&gt; { itens: Vec&lt;T&gt; }</code> com <code>new</code>, <code>empilhar(&amp;mut self, x: T)</code> e <code>desempilhar(&amp;mut self) -&gt; Option&lt;T&gt;</code>. Empilhe 10, 20, 30, desempilhe uma vez e imprima <code>topo: Some(30)</code> e <code>tamanho: 2</code>.
+--- script
+fn main() {
+}
+--- solucao
+struct Pilha<T> {
+    itens: Vec<T>,
+}
+
+impl<T> Pilha<T> {
+    fn new() -> Self {
+        Pilha { itens: Vec::new() }
+    }
+    fn empilhar(&mut self, x: T) {
+        self.itens.push(x);
+    }
+    fn desempilhar(&mut self) -> Option<T> {
+        self.itens.pop()
+    }
+}
+
+fn main() {
+    let mut p = Pilha::new();
+    p.empilhar(10);
+    p.empilhar(20);
+    p.empilhar(30);
+    println!("topo: {:?}", p.desempilhar());
+    println!("tamanho: {}", p.itens.len());
+}
+:::
+::: missao goal="src:where;;src:Display;;out:[1] [2] [3];;out:[a] [b]"
+Escreva <code>fn colchetes&lt;T&gt;(v: &amp;[T]) -&gt; String</code> com <code>where T: Display</code>, que devolve cada item entre colchetes separados por espaço. Imprima para <code>[1, 2, 3]</code> e <code>['a', 'b']</code>.
+--- script
+use std::fmt::Display;
+
+fn main() {
+}
+--- solucao
+use std::fmt::Display;
+
+fn colchetes<T>(v: &[T]) -> String
+where
+    T: Display,
+{
+    v.iter().map(|x| format!("[{x}]")).collect::<Vec<_>>().join(" ")
+}
+
+fn main() {
+    println!("{}", colchetes(&[1, 2, 3]));
+    println!("{}", colchetes(&['a', 'b']));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>fn f&lt;T&gt;(x: T)</code>, <code>struct S&lt;T&gt;</code>, <code>impl&lt;T&gt; S&lt;T&gt;</code> declaram generics.</li>
+<li>Restrinja com traits: <code>T: PartialOrd + Display</code>, ou com <code>where</code>.</li>
+<li>Sem a restrição, o compilador recusa operações que <code>T</code> pode não ter.</li>
+<li>Generics são resolvidos na compilação: zero custo na execução.</li>
+</ul>
