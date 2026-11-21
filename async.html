@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>async e await em Rust — Future, poll, Waker e um executor feito à mão | Guia Rust</title>
+<meta name="description" content="Introdução a async/await em Rust só com a biblioteca padrão: o que é uma Future, por que ela não faz nada sozinha, poll, Poll::Ready e Poll::Pending, Waker, um block_on de 20 linhas, uma future própria e o runtime tokio.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">async</span>/<span class="hl">await</span> básico</h1>
+
+<p class="intro">Threads são ótimas para trabalho pesado de CPU. Para programas que passam a maior parte do tempo <strong>esperando</strong> (rede, disco, temporizadores), o Rust oferece <code>async</code>/<code>await</code>: muitas tarefas podem esperar ao mesmo tempo sem uma thread para cada uma. Nesta aula você vai entender como isso funciona por dentro, usando só a biblioteca padrão.</p>
+<div class="note"><strong>A diferença do Rust</strong>: a linguagem traz <code>async</code>, <code>.await</code> e o trait <code>Future</code>, mas <strong>não</strong> traz um <em>executor</em> (quem roda as futures). Em projetos reais se usa um runtime pronto, como o <code>tokio</code>. Aqui vamos escrever um executor mínimo para ver as engrenagens.</div>
+
+<hr>
+<h2>1. Uma future não faz nada sozinha</h2>
+<pre class="file" data-file="src/main.rs">async fn saudar() {
+    println!("olá do async");
+}
+
+fn main() {
+    saudar();
+    println!("fim do main");
+}</pre>
+<pre class="term" data-cwd="~/projetos/preguica">$ cargo run
+   Compiling preguica v0.1.0 (/home/ana/projetos/preguica)
+warning: unused implementer of `Future` that must be used
+ --&gt; src/main.rs:6:5
+  |
+6 |     saudar();
+  |     ^^^^^^^^
+  |
+  = note: futures do nothing unless you `.await` or poll them
+  = note: `#[warn(unused_must_use)]` (part of `#[warn(unused)]`) on by default
+
+warning: `preguica` (bin "preguica") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running `target/debug/preguica`
+fim do main</pre>
+<p>Chamar uma <code>async fn</code> <strong>não roda</strong> o corpo dela: só cria um valor que implementa <code>Future</code>, uma “promessa de trabalho”. O próprio compilador avisa: futures não fazem nada até alguém usar <code>.await</code> ou chamar <code>poll</code>. E <code>.await</code> só pode ser usado dentro de outra função <code>async</code>:</p>
+<pre class="file" data-file="src/main.rs">async fn saudar() {
+    println!("olá do async");
+}
+
+fn main() {
+    saudar().await;
+}</pre>
+<pre class="term" data-cwd="~/projetos/await-no-main">$ cargo run
+   Compiling await-no-main v0.1.0 (/home/ana/projetos/await-no-main)
+error[E0728]: `await` is only allowed inside `async` functions and blocks
+ --&gt; src/main.rs:6:14
+  |
+5 | fn main() {
+  | --------- this is not `async`
+6 |     saudar().await;
+  |              ^^^^^ only allowed inside `async` functions and blocks
+
+For more information about this error, try `rustc --explain E0728`.
+error: could not compile `await-no-main` (bin "await-no-main") due to 1 previous error</pre>
+
+<hr>
+<h2>2. O trait Future e o poll</h2>
+<p>Por dentro, uma future é algo que sabe responder à pergunta “já terminou?”:</p>
+<pre class="file" data-file="std::future::Future (simplificado)">pub trait Future {
+    type Output;
+    fn poll(self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;Self::Output&gt;;
+}
+
+pub enum Poll&lt;T&gt; {
+    Ready(T),
+    Pending,
+}</pre>
+<dl class="anatomy"><dt>poll</dt><dd>o executor chama para fazer a future andar.</dd><dt>Poll::Ready(v)</dt><dd>terminou, e o resultado é <code>v</code>.</dd><dt>Poll::Pending</dt><dd>ainda não; a future promete avisar quando valer a pena tentar de novo.</dd><dt>Context / Waker</dt><dd>o jeito de avisar: a future guarda o <code>Waker</code> e chama <code>wake()</code> quando tiver novidade.</dd><dt>Pin</dt><dd>garante que a future não mude de lugar na memória enquanto está sendo executada.</dd></dl>
+
+<hr>
+<h2>3. Um executor de 20 linhas</h2>
+<p>O <code>block_on</code> abaixo roda uma future até o fim na thread atual: chama <code>poll</code>; se vier <code>Pending</code>, dorme (<code>thread::park</code>) até alguém chamar <code>wake</code>, que acorda a thread (<code>unpark</code>).</p>
+<pre class="file" data-file="src/main.rs">use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+
+struct Acordador(Thread);
+
+impl Wake for Acordador {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(Acordador(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    loop {
+        match fut.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return v,
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+async fn dobro(x: u32) -&gt; u32 {
+    x * 2
+}
+
+async fn calcular() -&gt; u32 {
+    let a = dobro(10).await;
+    let b = dobro(a).await;
+    println!("a = {a}, b = {b}");
+    a + b
+}
+
+fn main() {
+    let total = block_on(calcular());
+    println!("total = {total}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/executor">$ cargo run
+   Compiling executor v0.1.0 (/home/ana/projetos/executor)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/executor`
+a = 20, b = 40
+total = 60</pre>
+<p>Dentro de <code>calcular</code>, cada <code>.await</code> espera a outra future terminar e pega o resultado, como uma chamada normal. A diferença é que, se alguma delas estivesse esperando algo de fora, a tarefa toda devolveria <code>Pending</code> sem travar a thread.</p>
+
+<hr>
+<h2>4. Uma future feita à mão: um temporizador</h2>
+<p>Agora uma future que de fato espera. Ela pede a uma thread auxiliar para dormir e, quando o tempo passa, chama o <code>Waker</code>.</p>
+<pre class="file" data-file="src/main.rs">use std::future::Future;
+use std::pin::{pin, Pin};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+use std::time::{Duration, Instant};
+
+struct Acordador(Thread);
+
+impl Wake for Acordador {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(Acordador(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    let mut polls = 0;
+    loop {
+        polls += 1;
+        match fut.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; {
+                println!("[executor] terminou depois de {polls} chamadas a poll");
+                return v;
+            }
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+struct Estado {
+    pronto: bool,
+    waker: Option&lt;Waker&gt;,
+}
+
+struct Temporizador {
+    estado: Arc&lt;Mutex&lt;Estado&gt;&gt;,
+}
+
+impl Temporizador {
+    fn novo(tempo: Duration) -&gt; Self {
+        let estado = Arc::new(Mutex::new(Estado { pronto: false, waker: None }));
+        let e = Arc::clone(&amp;estado);
+        thread::spawn(move || {
+            thread::sleep(tempo);
+            let mut e = e.lock().unwrap();
+            e.pronto = true;
+            if let Some(w) = e.waker.take() {
+                w.wake();
+            }
+        });
+        Temporizador { estado }
+    }
+}
+
+impl Future for Temporizador {
+    type Output = ();
+    fn poll(self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;()&gt; {
+        let mut e = self.estado.lock().unwrap();
+        if e.pronto {
+            Poll::Ready(())
+        } else {
+            e.waker = Some(cx.waker().clone());
+            Poll::Pending
+        }
+    }
+}
+
+async fn tarefa() -&gt; &amp;'static str {
+    println!("esperando 100 ms...");
+    Temporizador::novo(Duration::from_millis(100)).await;
+    println!("esperando mais 50 ms...");
+    Temporizador::novo(Duration::from_millis(50)).await;
+    "pronto"
+}
+
+fn main() {
+    let inicio = Instant::now();
+    let r = block_on(tarefa());
+    println!("{r} em pelo menos {} ms", inicio.elapsed().as_millis() / 50 * 50);
+}</pre>
+<pre class="term" data-cwd="~/projetos/temporizador">$ cargo run
+   Compiling temporizador v0.1.0 (/home/ana/projetos/temporizador)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/temporizador`
+esperando 100 ms...
+esperando mais 50 ms...
+[executor] terminou depois de 3 chamadas a poll
+pronto em pelo menos 150 ms</pre>
+<p>Foram 3 chamadas a <code>poll</code>: a primeira parou no primeiro temporizador, a segunda no segundo e a terceira terminou. Entre elas, a thread principal ficou <strong>dormindo</strong>, sem gastar CPU, até o <code>Waker</code> chamar. É esse o truque de todo runtime async: dormir até ser acordado.</p>
+
+<hr>
+<h2>5. Na prática: tokio</h2>
+<p>Num projeto real você não escreve o executor. O mais usado é o <code>tokio</code>, que roda milhares de tarefas e já traz temporizadores, rede e arquivos assíncronos:</p>
+<p>Num projeto criado com <code>cargo new relogios</code>, com este <code>src/main.rs</code>:</p>
+<pre class="file" data-file="src/main.rs">use std::time::{Duration, Instant};
+use tokio::time::sleep;
+
+async fn tarefa(nome: &amp;str, ms: u64) -&gt; String {
+    sleep(Duration::from_millis(ms)).await;
+    format!("{nome} terminou")
+}
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
+    let inicio = Instant::now();
+    let (a, b, c) = tokio::join!(
+        tarefa("A", 300),
+        tarefa("B", 200),
+        tarefa("C", 100),
+    );
+    println!("{a}, {b}, {c}");
+    println!("tempo total: ~{} ms", inicio.elapsed().as_millis() / 100 * 100);
+}</pre>
+<pre class="term" data-cwd="~/projetos/relogios">$ cargo add tokio --features rt,macros,time
+    Updating crates.io index
+      Adding tokio v1.54.1 to dependencies
+             Features:
+             + macros
+             + rt
+             + time
+             + tokio-macros
+             - bytes
+             - fs
+             - full
+             - io-std
+             - io-uring
+             - io-util
+             - libc
+             - mio
+             - net
+             - parking_lot
+             - process
+             - rt-multi-thread
+             - schedule-latency
+             - signal
+             - signal-hook-registry
+             - socket2
+             - sync
+             - taskdump
+             - test-util
+             - tracing
+             - windows-sys
+    Updating crates.io index
+     Locking 7 packages to highest Rust 1.100.0 compatible versions
+$ cargo run -q
+A terminou, B terminou, C terminou
+tempo total: ~300 ms</pre>
+<p>As três tarefas esperaram <strong>ao mesmo tempo</strong>, numa única thread (<code>current_thread</code>): o total foi cerca de 300 ms, e não 600. <code>tokio::join!</code> faz o <code>poll</code> de várias futures alternadamente, exatamente como nosso executor, só que com várias de uma vez.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para declarar uma função assíncrona:</p><div class="ex-code"><input data-answer="async" aria-label="resposta"> fn baixar() -&gt; u32 { 42 }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para esperar o resultado dentro de outra função async:</p><div class="ex-code">let n = baixar().<input data-answer="await" aria-label="resposta">;</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">O que acontece quando se chama uma <code>async fn</code> sem <code>.await</code>?</p>
+<label><input type="radio" name="q1"> o corpo roda numa nova thread</label>
+<label><input type="radio" name="q1"> nada roda; só é criada uma future</label>
+<label><input type="radio" name="q1"> o programa entra em pânico</label>
+<label><input type="radio" name="q1"> o corpo roda na hora, como uma função normal</label></div>
+<div class="mc" data-answer="3"><p class="mc-q">O que <code>poll</code> devolve quando a future ainda não terminou?</p>
+<label><input type="radio" name="q2"> <code>None</code></label>
+<label><input type="radio" name="q2"> <code>Err(Pending)</code></label>
+<label><input type="radio" name="q2"> <code>Poll::Pending</code></label>
+<label><input type="radio" name="q2"> <code>Poll::Ready(())</code></label></div>
+<div class="trycmd" data-goal="src:\.await;;out:soma = 30;;semerro">
+<p class="try-task"><strong>Missão:</strong> Complete <code>somar</code> usando <code>.await</code> em <code>valor(10)</code> e <code>valor(20)</code>, para o programa imprimir <code>soma = 30</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+
+struct Acordador(Thread);
+
+impl Wake for Acordador {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(Acordador(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    loop {
+        match fut.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return v,
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+async fn valor(n: i32) -&gt; i32 {
+    n
+}
+
+async fn somar() -&gt; i32 {
+    0
+}
+
+fn main() {
+    println!("soma = {}", block_on(somar()));
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::future::Future;
+use std::pin::pin;
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+
+struct Acordador(Thread);
+
+impl Wake for Acordador {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(Acordador(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    loop {
+        match fut.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return v,
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+async fn valor(n: i32) -&gt; i32 {
+    n
+}
+
+async fn somar() -&gt; i32 {
+    let a = valor(10).await;
+    let b = valor(20).await;
+    a + b
+}
+
+fn main() {
+    println!("soma = {}", block_on(somar()));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/missao`
+soma = 30
+</pre>
+</div>
+<div class="trycmd" data-goal="src:Poll::Pending;;out:pronto depois de 3 tentativas;;semerro">
+<p class="try-task"><strong>Missão:</strong> A future <code>Teimosa</code> deve responder <code>Poll::Pending</code> nas duas primeiras chamadas a <code>poll</code> (chamando <code>cx.waker().wake_by_ref()</code> para pedir outra chance) e <code>Poll::Ready</code> na terceira. Complete o <code>poll</code> para a saída ser <code>pronto depois de 3 tentativas</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+
+struct Acordador(Thread);
+
+impl Wake for Acordador {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(Acordador(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    loop {
+        match fut.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return v,
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+struct Teimosa {
+    tentativas: u32,
+}
+
+impl Future for Teimosa {
+    type Output = u32;
+    fn poll(mut self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;u32&gt; {
+        self.tentativas += 1;
+        let _ = cx;
+        Poll::Ready(self.tentativas)
+    }
+}
+
+fn main() {
+    let n = block_on(Teimosa { tentativas: 0 });
+    println!("pronto depois de {n} tentativas");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::future::Future;
+use std::pin::{pin, Pin};
+use std::sync::Arc;
+use std::task::{Context, Poll, Wake, Waker};
+use std::thread::{self, Thread};
+
+struct Acordador(Thread);
+
+impl Wake for Acordador {
+    fn wake(self: Arc&lt;Self&gt;) {
+        self.0.unpark();
+    }
+}
+
+fn block_on&lt;F: Future&gt;(fut: F) -&gt; F::Output {
+    let mut fut = pin!(fut);
+    let waker = Waker::from(Arc::new(Acordador(thread::current())));
+    let mut cx = Context::from_waker(&amp;waker);
+    loop {
+        match fut.as_mut().poll(&amp;mut cx) {
+            Poll::Ready(v) =&gt; return v,
+            Poll::Pending =&gt; thread::park(),
+        }
+    }
+}
+
+struct Teimosa {
+    tentativas: u32,
+}
+
+impl Future for Teimosa {
+    type Output = u32;
+    fn poll(mut self: Pin&lt;&amp;mut Self&gt;, cx: &amp;mut Context&lt;'_&gt;) -&gt; Poll&lt;u32&gt; {
+        self.tentativas += 1;
+        if self.tentativas &lt; 3 {
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            Poll::Ready(self.tentativas)
+        }
+    }
+}
+
+fn main() {
+    let n = block_on(Teimosa { tentativas: 0 });
+    println!("pronto depois de {n} tentativas");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/missao`
+pronto depois de 3 tentativas
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>async fn</code> devolve uma <code>Future</code>; nada roda até alguém fazer <code>poll</code> (direto ou via <code>.await</code>).</li>
+<li><code>poll</code> devolve <code>Ready(v)</code> ou <code>Pending</code>; com <code>Pending</code>, a future guarda o <code>Waker</code> e avisa depois.</li>
+<li>Um executor chama <code>poll</code> e dorme entre as chamadas; o Rust não traz um, mas dá para escrever um com <code>std::task::Wake</code>.</li>
+<li>Na prática, use um runtime como o <code>tokio</code> (<code>#[tokio::main]</code>, <code>tokio::join!</code>).</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

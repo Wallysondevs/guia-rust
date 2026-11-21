@@ -69,7 +69,8 @@ var NIVEIS = [
     { grupo: "Concorrência", itens: [
       ["threads.html", "Threads"],
       ["canais.html", "Canais (mpsc)"],
-      ["arc-mutex.html", "Arc e Mutex"]
+      ["arc-mutex.html", "Arc e Mutex"],
+      ["async.html", "async/await básico"]
     ]}
   ]}
 ];
