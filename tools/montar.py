@@ -290,7 +290,7 @@ def b_ex(opts, corpo, slug):
     cod = "\n".join(linhas[1:]).strip("\n")
     def inp(m):
         return f'<input data-answer="{attr(m.group(1))}" aria-label="resposta">'
-    partes = re.split(r"(\[\[.*?\]\])", cod)
+    partes = re.split(r"(\[\[[^\[\]]*\]\])", cod)
     h = ""
     for p in partes:
         if p.startswith("[[") and p.endswith("]]"):

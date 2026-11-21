@@ -22,7 +22,9 @@ var NIVEIS = [
       ["controle-fluxo.html", "Controle de fluxo"]
     ]},
     { grupo: "Ownership", itens: [
-      ["ownership.html", "Ownership (posse)"]
+      ["ownership.html", "Ownership (posse)"],
+      ["borrowing.html", "Borrowing (referências)"],
+      ["slices.html", "Slices (&str e &[T])"]
     ]}
   ]}
 ];

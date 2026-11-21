@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Borrowing em Rust — referências &amp; e &amp;mut e as regras do empréstimo | Guia Rust</title>
+<meta name="description" content="Referências em Rust: emprestar com &amp; sem passar a posse, referências mutáveis com &amp;mut, a regra &quot;várias leituras ou uma escrita&quot; (E0499 e E0502) e por que não existe referência pendurada (E0106).">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Borrowing (<span class="hl">referências</span>)</h1>
+
+<p class="intro">Na aula passada, passar uma <code>String</code> para uma função fazia você perder a posse dela. A solução é <strong>emprestar</strong>: em vez do valor, você passa uma <strong>referência</strong> (<code>&amp;</code>), que deixa a função usar o dado sem virar dona. Em Rust, isso se chama <em>borrowing</em> (empréstimo).</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar referências com <code>&amp;</code> e referências mutáveis com <code>&amp;mut</code>.</li>
+<li>A regra de ouro: <strong>várias leituras OU uma escrita</strong>, nunca as duas ao mesmo tempo.</li>
+<li>Os erros E0596, E0499 e E0502, e por que o Rust não deixa uma referência ficar “pendurada”.</li>
+</ul></div>
+
+<hr>
+<h2>1. Emprestar para ler: <code>&amp;</code></h2>
+<pre class="file" data-file="src/main.rs">fn tamanho(s: &amp;String) -&gt; usize {
+    s.len()
+}
+
+fn main() {
+    let texto = String::from("emprestado");
+    let n = tamanho(&amp;texto);
+    println!("'{texto}' tem {n} letras");
+}</pre>
+<pre class="term" data-cwd="~/projetos/ref">$ cargo run
+   Compiling ref v0.1.0 (/home/ana/projetos/ref)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/ref`
+'emprestado' tem 10 letras</pre>
+<p>O <code>&amp;texto</code> cria uma referência; a função recebe <code>&amp;String</code>. Quando ela termina, só a referência some: o dono continua sendo <code>texto</code>, que segue válido no <code>println!</code>.</p>
+<dl class="anatomy"><dt>&amp;texto</dt><dd>“empresta o texto para leitura”.</dd><dt>s: &amp;String</dt><dd>o parâmetro é uma referência, não o dono.</dd><dt>s.len()</dt><dd>dá para ler pela referência normalmente.</dd></dl>
+
+<hr>
+<h2>2. Referência normal não deixa mudar</h2>
+<pre class="file" data-file="src/main.rs">fn adicionar(s: &amp;String) {
+    s.push_str(" mundo");
+}
+
+fn main() {
+    let texto = String::from("olá");
+    adicionar(&amp;texto);
+    println!("{texto}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/ref-mudar">$ cargo run
+   Compiling ref-mudar v0.1.0 (/home/ana/projetos/ref-mudar)
+error[E0596]: cannot borrow `*s` as mutable, as it is behind a `&amp;` reference
+ --&gt; src/main.rs:2:5
+  |
+2 |     s.push_str(" mundo");
+  |     ^ `s` is a `&amp;` reference, so it cannot be borrowed as mutable
+  |
+help: consider changing this to be a mutable reference
+  |
+1 | fn adicionar(s: &amp;mut String) {
+  |                  +++
+
+For more information about this error, try `rustc --explain E0596`.
+error: could not compile `ref-mudar` (bin "ref-mudar") due to 1 previous error</pre>
+<p>Erro <strong>E0596</strong>: pela referência <code>&amp;</code> só se lê. O <code>help</code> já mostra a saída: trocar para <code>&amp;mut String</code>.</p>
+
+<hr>
+<h2>3. Emprestar para escrever: <code>&amp;mut</code></h2>
+<pre class="file" data-file="src/main.rs">fn adicionar(s: &amp;mut String) {
+    s.push_str(" mundo");
+}
+
+fn main() {
+    let mut texto = String::from("olá");
+    adicionar(&amp;mut texto);
+    println!("{texto}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/ref-mut">$ cargo run
+   Compiling ref-mut v0.1.0 (/home/ana/projetos/ref-mut)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/ref-mut`
+olá mundo</pre>
+<p>Três lugares precisam concordar: a variável é <code>mut</code>, o empréstimo é <code>&amp;mut texto</code> e o parâmetro é <code>&amp;mut String</code>.</p>
+
+<hr>
+<h2>4. A regra: várias leituras OU uma escrita</h2>
+<p>Num mesmo momento, você pode ter <strong>quantas referências <code>&amp;</code> quiser</strong> ou <strong>uma única <code>&amp;mut</code></strong>. Duas escritas ao mesmo tempo não pode:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut s = String::from("a");
+    let r1 = &amp;mut s;
+    let r2 = &amp;mut s;
+    r1.push('b');
+    r2.push('c');
+    println!("{s}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/dois-mut">$ cargo run
+   Compiling dois-mut v0.1.0 (/home/ana/projetos/dois-mut)
+error[E0499]: cannot borrow `s` as mutable more than once at a time
+ --&gt; src/main.rs:4:14
+  |
+3 |     let r1 = &amp;mut s;
+  |              ------ first mutable borrow occurs here
+4 |     let r2 = &amp;mut s;
+  |              ^^^^^^ second mutable borrow occurs here
+5 |     r1.push('b');
+  |     -- first borrow later used here
+
+For more information about this error, try `rustc --explain E0499`.
+error: could not compile `dois-mut` (bin "dois-mut") due to 1 previous error</pre>
+<p>Erro <strong>E0499</strong>. E ler enquanto alguém escreve também não:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut notas = vec![7, 8];
+    let primeira = &amp;notas[0];
+    notas.push(10);
+    println!("primeira: {primeira}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/ler-escrever">$ cargo run
+   Compiling ler-escrever v0.1.0 (/home/ana/projetos/ler-escrever)
+error[E0502]: cannot borrow `notas` as mutable because it is also borrowed as immutable
+ --&gt; src/main.rs:4:5
+  |
+3 |     let primeira = &amp;notas[0];
+  |                     ----- immutable borrow occurs here
+4 |     notas.push(10);
+  |     ^^^^^^^^^^^^^^ mutable borrow occurs here
+5 |     println!("primeira: {primeira}");
+  |                          -------- immutable borrow later used here
+
+For more information about this error, try `rustc --explain E0502`.
+error: could not compile `ler-escrever` (bin "ler-escrever") due to 1 previous error</pre>
+<p>Erro <strong>E0502</strong>. Este é um bug real que o Rust evita: o <code>push</code> pode precisar de mais espaço e mudar o vetor de lugar na memória. Aí <code>primeira</code> apontaria para memória velha. Em C++, isso compila e dá problema na hora de rodar.</p>
+
+<hr>
+<h2>5. O empréstimo acaba no último uso</h2>
+<p>Um empréstimo dura só até a última vez que a referência é usada (não até o fim do bloco). Por isso, este código compila:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut s = String::from("Rust");
+    let r1 = &amp;s;
+    let r2 = &amp;s;
+    println!("{r1} e {r2}");
+    // r1 e r2 não são mais usadas daqui para baixo
+    let r3 = &amp;mut s;
+    r3.push_str("acean");
+    println!("{r3}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/nll">$ cargo run
+   Compiling nll v0.1.0 (/home/ana/projetos/nll)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/nll`
+Rust e Rust
+Rustacean</pre>
+
+<hr>
+<h2>6. Não existe referência pendurada</h2>
+<p>Uma referência nunca pode viver mais que o dono. Tentar devolver uma referência para uma variável local é barrado:</p>
+<pre class="file" data-file="src/main.rs">fn criar() -&gt; &amp;String {
+    let s = String::from("temporária");
+    &amp;s
+}
+
+fn main() {
+    let r = criar();
+    println!("{r}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/pendurada">$ cargo run
+   Compiling pendurada v0.1.0 (/home/ana/projetos/pendurada)
+error[E0106]: missing lifetime specifier
+ --&gt; src/main.rs:1:15
+  |
+1 | fn criar() -&gt; &amp;String {
+  |               ^ expected named lifetime parameter
+  |
+  = help: this function's return type contains a borrowed value, but there is no value for it to be borrowed from
+help: consider using the `'static` lifetime, but this is uncommon unless you're returning a borrowed value from a `const` or a `static`
+  |
+1 | fn criar() -&gt; &amp;'static String {
+  |                +++++++
+help: instead, you are more likely to want to return an owned value
+  |
+1 - fn criar() -&gt; &amp;String {
+1 + fn criar() -&gt; String {
+  |
+
+For more information about this error, try `rustc --explain E0106`.
+error: could not compile `pendurada` (bin "pendurada") due to 1 previous error</pre>
+<p>O <code>s</code> morre no fim de <code>criar</code>; a referência apontaria para memória liberada. O compilador pede um <em>lifetime</em> (assunto do Nível 2) e, na prática, a correção é devolver a própria <code>String</code> (a posse), não uma referência.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para emprestar <code>nome</code> sem passar a posse:</p><div class="ex-code">saudar(<input data-answer="&amp;" aria-label="resposta">nome);</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o tipo do parâmetro que pode alterar a String:</p><div class="ex-code">fn limpar(s: <input data-answer="&amp;mut String" aria-label="resposta">) { s.clear(); }</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Qual combinação de referências é permitida ao mesmo tempo?</p>
+<label><input type="radio" name="q1"> Duas <code>&amp;mut</code></label>
+<label><input type="radio" name="q1"> Uma <code>&amp;</code> e uma <code>&amp;mut</code></label>
+<label><input type="radio" name="q1"> Três <code>&amp;</code></label>
+<label><input type="radio" name="q1"> Nenhuma: só uma referência por vez</label></div>
+<div class="mc" data-answer="1"><p class="mc-q">Por que o Rust barra <code>let p = &amp;v[0]; v.push(1); println!("{p}");</code>?</p>
+<label><input type="radio" name="q2"> Porque o <code>push</code> pode mudar o vetor de lugar e <code>p</code> apontaria para memória velha</label>
+<label><input type="radio" name="q2"> Porque vetores não aceitam referências</label>
+<label><input type="radio" name="q2"> Porque falta <code>mut</code> em <code>p</code></label>
+<label><input type="radio" name="q2"> Porque <code>v[0]</code> não existe</label></div>
+<div class="trycmd" data-goal="src:fn\s+contar_vogais\s*\(\s*\w+\s*:\s*&amp;str|fn\s+contar_vogais\s*\(\s*\w+\s*:\s*&amp;String;;src:contar_vogais\(\s*&amp;;;out:'programação' tem 5 vogais">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn contar_vogais(s: &amp;String) -&gt; usize</code> (ou com <code>&amp;str</code>) que conta as letras <code>a e i o u</code> (dica: <code>s.chars().filter(|c| "aeiouáãéêíóõú".contains(*c)).count()</code>). Chame emprestando e, <strong>depois</strong>, ainda use a String: <code>'programação' tem 5 vogais</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let palavra = String::from("programação");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn contar_vogais(s: &amp;String) -&gt; usize {
+    s.chars().filter(|c| "aeiouáãéêíóõú".contains(*c)).count()
+}
+
+fn main() {
+    let palavra = String::from("programação");
+    let n = contar_vogais(&amp;palavra);
+    println!("'{palavra}' tem {n} vogais");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/missao`
+'programação' tem 5 vogais
+</pre>
+</div>
+<div class="trycmd" data-goal="src:&amp;mut\s+String;;src:anotar\(\s*&amp;mut\s+\w+;;out:Lista: pão, leite, café">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn anotar(lista: &amp;mut String, item: &amp;str)</code> que acrescenta <code>", "</code> e o item. Comece com <code>"pão"</code>, anote <code>leite</code> e <code>café</code> e imprima <code>Lista: pão, leite, café</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let lista = String::from("pão");
+    println!("Lista: {lista}");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn anotar(lista: &amp;mut String, item: &amp;str) {
+    lista.push_str(", ");
+    lista.push_str(item);
+}
+
+fn main() {
+    let mut lista = String::from("pão");
+    anotar(&amp;mut lista, "leite");
+    anotar(&amp;mut lista, "café");
+    println!("Lista: {lista}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/missao`
+Lista: pão, leite, café
+</pre>
+</div>
+<div class="trycmd" data-goal="src:println!\(\x22primeira: \{primeira\}\x22\);\s*\n\s*notas\.push|println!\(\x22primeira: \{\}\x22,\s*primeira\);\s*\n\s*notas\.push;;out:primeira: 7;;out:[7, 8, 10];;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0502. Sem usar <code>clone</code>, mude a <strong>ordem</strong> das linhas: imprima <code>primeira</code> antes do <code>push</code>. A saída deve ter <code>primeira: 7</code> e depois <code>[7, 8, 10]</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut notas = vec![7, 8];
+    let primeira = &amp;notas[0];
+    notas.push(10);
+    println!("primeira: {primeira}");
+    println!("{:?}", notas);
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut notas = vec![7, 8];
+    let primeira = &amp;notas[0];
+    println!("primeira: {primeira}");
+    notas.push(10);
+    println!("{:?}", notas);
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+primeira: 7
+[7, 8, 10]
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>&amp;valor</code> empresta para leitura; <code>&amp;mut valor</code>, para escrita (a variável precisa ser <code>mut</code>).</li>
+<li>Várias <code>&amp;</code> <strong>ou</strong> uma <code>&amp;mut</code> ao mesmo tempo (E0499, E0502).</li>
+<li>O empréstimo termina no último uso da referência.</li>
+<li>Uma referência nunca vive mais que o dono: nada de referência pendurada.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

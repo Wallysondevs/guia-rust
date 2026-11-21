@@ -1,0 +1,195 @@
+---
+slug: slices
+menu: Slices (&str e &[T])
+titulo: Slices em Rust — &str, &[T], faixas e a diferença entre String e &str | Guia Rust
+desc: Slices em Rust: pedaços de texto (&str) e de arrays e vetores (&[T]) com faixas [a..b], a diferença entre String e &str, por que fatiar no meio de um caractere dá panic e como escrever funções que aceitam os dois.
+h1: Slices (<span class="hl">&amp;str</span> e <span class="hl">&amp;[T]</span>)
+nivel: n1
+grupo: Ownership
+---
+<p class="intro">Um <strong>slice</strong> (fatia) é uma referência para um <strong>pedaço</strong> de uma sequência: parte de um texto, parte de um array ou de um vetor. Ele não copia nada, só aponta para o começo e guarda o tamanho. É o jeito do Rust de dizer “estes elementos, daqui até ali”.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A fatiar textos (<code>&amp;s[0..5]</code>) e arrays (<code>&amp;a[1..3]</code>).</li>
+<li>A diferença entre <code>String</code> (dona do texto) e <code>&amp;str</code> (fatia emprestada).</li>
+<li>Por que <code>&amp;str</code> é o melhor tipo de parâmetro e o cuidado com acentos ao fatiar.</li>
+</ul></div>
+
+<hr>
+<h2>1. Fatias de texto</h2>
+::: exemplo fatias-texto
+fn main() {
+    let frase = String::from("olá mundo");
+    let mundo = &frase[5..];
+    let ola = &frase[..4];
+    println!("[{ola}] [{mundo}]");
+    println!("bytes: {}", frase.len());
+}
+:::
+<p>Os números são posições em <strong>bytes</strong>, não em letras. O <code>á</code> ocupa 2 bytes em UTF-8, por isso “olá” vai de 0 a 4 e a frase tem 10 bytes, não 9. As faixas funcionam como no <code>for</code>: <code>[a..b]</code>, <code>[..b]</code> (do começo), <code>[a..]</code> (até o fim), <code>[..]</code> (tudo).</p>
+
+<hr>
+<h2>2. Quando dá errado: fatiar no meio de um caractere</h2>
+::: exemplo fatia-acento falha
+fn main() {
+    let frase = String::from("olá mundo");
+    let pedaco = &frase[0..3];
+    println!("{pedaco}");
+}
+:::
+<p>Panic: o byte 3 cai no meio do <code>á</code>. O Rust não deixa um <code>&amp;str</code> conter UTF-8 inválido. Para trabalhar por letra, use <code>.chars()</code>:</p>
+::: exemplo chars
+fn main() {
+    let frase = "olá mundo";
+    let tres: String = frase.chars().take(3).collect();
+    println!("{tres}");
+    println!("letras: {}", frase.chars().count());
+}
+:::
+
+<hr>
+<h2>3. <code>String</code> × <code>&amp;str</code></h2>
+<div class="table-wrap"><table class="ref">
+<tr><th></th><th><code>String</code></th><th><code>&amp;str</code></th></tr>
+<tr><td>O que é</td><td>Dona do texto, no heap</td><td>Fatia emprestada de um texto</td></tr>
+<tr><td>Pode crescer?</td><td>Sim (<code>push_str</code>)</td><td>Não</td></tr>
+<tr><td>Exemplo</td><td><code>String::from("oi")</code></td><td><code>"oi"</code> (literal), <code>&amp;s[..2]</code></td></tr>
+</table></div>
+<p>Um literal como <code>"oi"</code> já é um <code>&amp;str</code>: uma fatia do texto que fica gravado dentro do executável. Por isso a regra prática: <strong>receba <code>&amp;str</code> nos parâmetros</strong>. Uma <code>&amp;String</code> vira <code>&amp;str</code> sozinha, então a função aceita os dois:</p>
+::: exemplo primeira-palavra
+fn primeira_palavra(s: &str) -> &str {
+    for (i, c) in s.char_indices() {
+        if c == ' ' {
+            return &s[..i];
+        }
+    }
+    s
+}
+
+fn main() {
+    let dona = String::from("bom dia");
+    println!("{}", primeira_palavra(&dona));
+    println!("{}", primeira_palavra("Rust é legal"));
+    println!("{}", primeira_palavra("sozinha"));
+}
+:::
+
+<hr>
+<h2>4. Slices protegem contra dados velhos</h2>
+<p>Como o slice é um empréstimo, o compilador não deixa o texto original mudar enquanto a fatia é usada:</p>
+::: exemplo slice-clear falha
+fn main() {
+    let mut s = String::from("bom dia");
+    let palavra = &s[..3];
+    s.clear();
+    println!("{palavra}");
+}
+:::
+<p>O <code>clear</code> precisa de <code>&amp;mut s</code>, mas <code>palavra</code> ainda empresta <code>s</code> para leitura: erro E0502, o mesmo da aula anterior. Sem essa regra, <code>palavra</code> apontaria para um texto apagado.</p>
+
+<hr>
+<h2>5. Fatias de arrays e vetores: <code>&amp;[T]</code></h2>
+::: exemplo fatias-array
+fn soma(valores: &[i32]) -> i32 {
+    let mut total = 0;
+    for v in valores {
+        total += v;
+    }
+    total
+}
+
+fn main() {
+    let a = [1, 2, 3, 4, 5];
+    let meio = &a[1..4];
+    println!("{:?}", meio);
+    println!("soma de tudo: {}", soma(&a));
+    println!("soma do meio: {}", soma(meio));
+    let v = vec![10, 20, 30];
+    println!("soma do vetor: {}", soma(&v));
+}
+:::
+<p>Assim como <code>&amp;str</code> serve para <code>String</code> e literais, <code>&amp;[i32]</code> serve para arrays, vetores e pedaços deles.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para pegar do byte 2 até o fim:
+let resto = &texto[[[2..]]];
+:::
+::: ex
+Complete o melhor tipo de parâmetro para receber texto emprestado:
+fn contar(s: [[&str]]) -> usize { s.len() }
+:::
+::: mc 2
+Quantos bytes tem <code>"pé"</code>?
+- 2
+- 3
+- 4
+- 1
+:::
+::: mc 4
+Por que <code>&amp;str</code> é melhor que <code>&amp;String</code> como parâmetro?
+- Porque é mais rápido de digitar
+- Porque <code>&amp;String</code> não compila
+- Porque <code>&amp;str</code> pode mudar o texto
+- Porque aceita tanto <code>&amp;String</code> quanto literais e fatias
+:::
+::: missao goal="src:fn\s+\w+\s*\(\s*\w+\s*:\s*&\[i32\]\s*\);;out:Maior: 42"
+Escreva <code>fn maior(v: &amp;[i32]) -&gt; i32</code>, que devolve o maior número da fatia. Teste com o vetor <code>vec![3, 42, 7, 15]</code> e imprima <code>Maior: 42</code>.
+--- script
+fn main() {
+    let v = vec![3, 42, 7, 15];
+}
+--- solucao
+fn maior(v: &[i32]) -> i32 {
+    let mut m = v[0];
+    for &x in v {
+        if x > m {
+            m = x;
+        }
+    }
+    m
+}
+
+fn main() {
+    let v = vec![3, 42, 7, 15];
+    println!("Maior: {}", maior(&v));
+}
+:::
+::: missao goal="src:&\w+\[\d*\.\.\d*\];;out:Domínio: exemplo.com"
+O texto <code>"ana@exemplo.com"</code> tem o <code>@</code> na posição 3 (byte). Use uma fatia com faixa para imprimir <code>Domínio: exemplo.com</code>.
+--- script
+fn main() {
+    let email = "ana@exemplo.com";
+}
+--- solucao
+fn main() {
+    let email = "ana@exemplo.com";
+    let dominio = &email[4..];
+    println!("Domínio: {dominio}");
+}
+:::
+::: missao goal="src:\.chars\(\);;out:Iniciais: Ç e Á"
+Pegue a <strong>primeira letra</strong> de <code>"Çopo"</code> e de <code>"Água"</code> usando <code>.chars().next()</code> (não fatias, que dariam panic com acentos) e imprima <code>Iniciais: Ç e Á</code>.
+--- script
+fn main() {
+    let a = "Çopo";
+    let b = "Água";
+    println!("Iniciais: {} e {}", &a[0..1], &b[0..1]);
+}
+--- solucao
+fn main() {
+    let a = "Çopo";
+    let b = "Água";
+    let ia = a.chars().next().unwrap();
+    let ib = b.chars().next().unwrap();
+    println!("Iniciais: {ia} e {ib}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Slice = referência para um pedaço: <code>&amp;s[a..b]</code>, <code>&amp;v[a..]</code>.</li>
+<li>Em texto, as posições são bytes; fatiar no meio de um caractere dá panic. Use <code>.chars()</code> para letras.</li>
+<li><code>String</code> é dona; <code>&amp;str</code> é fatia. Prefira <code>&amp;str</code> e <code>&amp;[T]</code> nos parâmetros.</li>
+</ul>
