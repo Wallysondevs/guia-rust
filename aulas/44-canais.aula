@@ -1,0 +1,225 @@
+---
+slug: canais
+menu: Canais (mpsc)
+titulo: Canais em Rust — std::sync::mpsc, send, recv e vários produtores | Guia Rust
+desc: Comunicação entre threads em Rust com canais mpsc: channel, send e recv, receber com for, vários produtores clonando o Sender, quando o canal fecha, try_recv, recv_timeout e sync_channel.
+h1: <span class="hl">Canais</span>: mensagens entre threads
+nivel: n3
+grupo: Concorrência
+---
+<p class="intro">Em vez de várias threads mexerem no mesmo dado, elas podem <strong>trocar mensagens</strong>. Um canal tem duas pontas: quem envia (<code>Sender</code>, o <em>transmissor</em>) e quem recebe (<code>Receiver</code>). O módulo da biblioteca padrão é <code>std::sync::mpsc</code>: <em>multiple producer, single consumer</em> (vários produtores, um consumidor).</p>
+
+<hr>
+<h2>1. Primeiro canal</h2>
+::: exemplo primeiro
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let msg = String::from("pedido 17 pronto");
+        tx.send(msg).unwrap();
+    });
+
+    let recebido = rx.recv().unwrap();
+    println!("recebi: {recebido}");
+}
+:::
+<dl class="anatomy"><dt>mpsc::channel()</dt><dd>cria o canal e devolve <code>(Sender, Receiver)</code>; por costume, <code>tx</code> e <code>rx</code>.</dd><dt>tx.send(v)</dt><dd>envia <code>v</code>; a posse do valor vai junto.</dd><dt>rx.recv()</dt><dd>espera (bloqueia) até chegar uma mensagem.</dd></dl>
+
+<h3>send move o valor</h3>
+::: exemplo depois-de-enviar falha
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let msg = String::from("oi");
+        tx.send(msg).unwrap();
+        println!("enviei {msg}");
+    });
+    println!("{}", rx.recv().unwrap());
+}
+:::
+<p>Depois de enviada, a <code>String</code> pertence a quem recebe. Usar de novo do lado de quem enviou é E0382: o compilador impede que duas threads mexam no mesmo valor.</p>
+
+<hr>
+<h2>2. Recebendo várias mensagens</h2>
+::: exemplo varias
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        for etapa in ["baixando", "descompactando", "instalando"] {
+            tx.send(etapa).unwrap();
+            thread::sleep(Duration::from_millis(20));
+        }
+    });
+
+    for msg in rx {
+        println!("status: {msg}");
+    }
+    println!("canal fechado");
+}
+:::
+<p><code>for msg in rx</code> recebe até o canal <strong>fechar</strong>, o que acontece quando todos os <code>Sender</code> deixam de existir (aqui, quando a thread termina e <code>tx</code> sai de escopo).</p>
+
+<hr>
+<h2>3. Vários produtores</h2>
+::: exemplo produtores
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    for id in 1..=3 {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let quadrado = id * id;
+            tx.send((id, quadrado)).unwrap();
+        });
+    }
+    drop(tx);
+
+    let mut resultados: Vec<(i32, i32)> = rx.iter().collect();
+    resultados.sort();
+    for (id, q) in resultados {
+        println!("trabalhador {id} mandou {q}");
+    }
+}
+:::
+<p>Cada thread recebe seu próprio clone do <code>Sender</code>. O <code>drop(tx)</code> é importante: o <code>tx</code> original também conta como produtor, e sem soltá-lo o canal nunca fecharia e o <code>collect</code> ficaria esperando para sempre. As mensagens chegam em ordem imprevisível; por isso o <code>sort</code>.</p>
+
+<hr>
+<h2>4. Sem bloquear: try_recv e recv_timeout</h2>
+::: exemplo try-recv
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<u32>();
+
+    println!("{:?}", rx.try_recv());
+
+    let h = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
+        tx.send(99).unwrap();
+    });
+
+    println!("{:?}", rx.recv_timeout(Duration::from_millis(5)));
+    println!("{:?}", rx.recv_timeout(Duration::from_secs(1)));
+    h.join().unwrap();
+    println!("{:?}", rx.try_recv());
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>Se não houver mensagem</th></tr>
+<tr><td><code>recv()</code></td><td>espera; <code>Err</code> só se o canal fechou</td></tr>
+<tr><td><code>try_recv()</code></td><td>volta na hora com <code>Err(Empty)</code>, ou <code>Err(Disconnected)</code> se fechou</td></tr>
+<tr><td><code>recv_timeout(d)</code></td><td>espera até <code>d</code>; depois <code>Err(Timeout)</code></td></tr>
+</table></div>
+<div class="note"><strong>sync_channel(n)</strong> cria um canal com espaço para no máximo <code>n</code> mensagens: quando ele enche, <code>send</code> espera. Útil para o produtor não andar muito à frente do consumidor.</div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para criar um canal:
+let (tx, rx) = mpsc::[[channel]]();
+:::
+::: ex
+Complete para enviar o número 5:
+tx.[[send]](5).unwrap();
+:::
+::: mc 2
+Quando um <code>for msg in rx</code> termina?
+- depois de 10 mensagens
+- quando todos os <code>Sender</code> foram destruídos e o canal fechou
+- quando a primeira mensagem chega
+- nunca
+:::
+::: mc 1
+O que significa <code>mpsc</code>?
+- vários produtores, um consumidor
+- um produtor, vários consumidores
+- memória protegida sem cópia
+- mensagens processadas sem concorrência
+:::
+::: missao goal="src:tx\.send;;out:recebi: 7;;out:recebi: 8;;out:recebi: 9;;semerro"
+Faça a thread enviar os números 7, 8 e 9 pelo canal. O <code>main</code> já imprime cada um como <code>recebi: N</code>.
+--- script
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<i32>();
+    thread::spawn(move || {
+        let _ = tx;
+    });
+    for n in rx {
+        println!("recebi: {n}");
+    }
+}
+--- solucao
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::<i32>();
+    thread::spawn(move || {
+        for n in 7..=9 {
+            tx.send(n).unwrap();
+        }
+    });
+    for n in rx {
+        println!("recebi: {n}");
+    }
+}
+:::
+::: missao goal="src:drop\(tx\);;out:total: 60;;semerro"
+Três threads mandam 10, 20 e 30. O programa trava porque o canal nunca fecha. Conserte para imprimir <code>total: 60</code>.
+--- script
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for v in [10, 20, 30] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(v).unwrap());
+    }
+    let total: i32 = rx.iter().sum();
+    println!("total: {total}");
+}
+--- solucao
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for v in [10, 20, 30] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(v).unwrap());
+    }
+    drop(tx);
+    let total: i32 = rx.iter().sum();
+    println!("total: {total}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>mpsc::channel()</code> devolve <code>(tx, rx)</code>; <code>send</code> envia e move o valor, <code>recv</code> espera.</li>
+<li><code>for msg in rx</code> recebe até o canal fechar.</li>
+<li>Vários produtores: <code>tx.clone()</code> para cada thread, e <code>drop(tx)</code> no original.</li>
+<li><code>try_recv</code> e <code>recv_timeout</code> não ficam presos esperando.</li>
+</ul>

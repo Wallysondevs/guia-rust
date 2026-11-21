@@ -1,0 +1,278 @@
+---
+slug: arc-mutex
+menu: Arc e Mutex
+titulo: Arc e Mutex em Rust — estado compartilhado entre threads | Guia Rust
+desc: Estado compartilhado entre threads em Rust: Mutex e lock, o MutexGuard, por que Rc não é Send (E0277), Arc&lt;Mutex&lt;T&gt;&gt;, RwLock, tipos atômicos e deadlock.
+h1: <span class="hl">Arc</span> e <span class="hl">Mutex</span>
+nivel: n3
+grupo: Concorrência
+---
+<p class="intro">Canais passam dados de uma thread para outra. Às vezes, porém, várias threads precisam mexer <strong>no mesmo</strong> dado: um contador, um cache, uma lista de resultados. Para isso, o Rust usa dois tipos juntos: <code>Mutex</code> garante que só uma thread mexa por vez, e <code>Arc</code> deixa várias threads serem donas do mesmo <code>Mutex</code>.</p>
+
+<hr>
+<h2>1. Mutex sozinho</h2>
+::: exemplo mutex
+use std::sync::Mutex;
+
+fn main() {
+    let m = Mutex::new(5);
+    {
+        let mut num = m.lock().unwrap();
+        *num += 1;
+    }
+    println!("m = {:?}", m);
+    println!("valor = {}", m.lock().unwrap());
+}
+:::
+<dl class="anatomy"><dt>Mutex::new(v)</dt><dd>protege <code>v</code>; não dá para acessar sem trancar.</dd><dt>m.lock()</dt><dd>espera até conseguir a trava e devolve um <code>MutexGuard</code> (dentro de um <code>Result</code>, que só é <code>Err</code> se outra thread entrou em pânico segurando a trava).</dd><dt>fim do escopo</dt><dd>o <code>MutexGuard</code> é destruído e a trava é liberada sozinha.</dd></dl>
+
+<hr>
+<h2>2. Rc não serve entre threads</h2>
+::: exemplo com-rc falha
+use std::rc::Rc;
+use std::sync::Mutex;
+use std::thread;
+
+fn main() {
+    let contador = Rc::new(Mutex::new(0));
+    let c = Rc::clone(&contador);
+    let h = thread::spawn(move || {
+        *c.lock().unwrap() += 1;
+    });
+    h.join().unwrap();
+}
+:::
+<p>O erro diz que <code>Rc</code> não pode ser enviado entre threads com segurança: falta o trait <code>Send</code>. O contador do <code>Rc</code> não é protegido, e duas threads clonando ao mesmo tempo poderiam corrompê-lo. O compilador impede isso antes do programa rodar.</p>
+
+<hr>
+<h2>3. Arc&lt;Mutex&lt;T&gt;&gt;</h2>
+<p><code>Arc</code> (<em>atomically reference counted</em>) é o <code>Rc</code> com contador atômico, seguro entre threads.</p>
+::: exemplo arc-mutex
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let contador = Arc::new(Mutex::new(0));
+    let mut handles = vec![];
+
+    for _ in 0..10 {
+        let c = Arc::clone(&contador);
+        handles.push(thread::spawn(move || {
+            for _ in 0..1000 {
+                *c.lock().unwrap() += 1;
+            }
+        }));
+    }
+
+    for h in handles {
+        h.join().unwrap();
+    }
+    println!("resultado: {}", *contador.lock().unwrap());
+}
+:::
+<p>Dez threads somaram 1000 cada uma, e o resultado é sempre exatamente 10000: nenhuma soma se perde, porque só uma thread por vez segura a trava.</p>
+
+<h3>Juntando resultados num Vec compartilhado</h3>
+::: exemplo vec-compartilhado
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let achados = Arc::new(Mutex::new(Vec::new()));
+    let handles: Vec<_> = (0..4)
+        .map(|parte| {
+            let achados = Arc::clone(&achados);
+            thread::spawn(move || {
+                for n in parte * 25 + 1..=parte * 25 + 25 {
+                    if n % 17 == 0 {
+                        achados.lock().unwrap().push(n);
+                    }
+                }
+            })
+        })
+        .collect();
+
+    for h in handles {
+        h.join().unwrap();
+    }
+    let mut v = achados.lock().unwrap().clone();
+    v.sort();
+    println!("múltiplos de 17 até 100: {:?}", v);
+}
+:::
+
+<hr>
+<h2>4. Outras ferramentas</h2>
+<h3>RwLock: muitos leitores ou um escritor</h3>
+::: exemplo rwlock
+use std::sync::{Arc, RwLock};
+use std::thread;
+
+fn main() {
+    let config = Arc::new(RwLock::new(String::from("modo=normal")));
+
+    let leitores: Vec<_> = (1..=3)
+        .map(|i| {
+            let c = Arc::clone(&config);
+            thread::spawn(move || {
+                let tamanho = c.read().unwrap().len();
+                (i, tamanho)
+            })
+        })
+        .collect();
+    for h in leitores {
+        let (i, t) = h.join().unwrap();
+        println!("leitor {i} leu {t} caracteres");
+    }
+
+    *config.write().unwrap() = String::from("modo=turbo");
+    println!("config: {}", config.read().unwrap());
+}
+:::
+<h3>Atômicos: contadores sem trava</h3>
+::: exemplo atomico
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+
+fn main() {
+    let visitas = Arc::new(AtomicUsize::new(0));
+    let hs: Vec<_> = (0..8)
+        .map(|_| {
+            let v = Arc::clone(&visitas);
+            thread::spawn(move || {
+                for _ in 0..500 {
+                    v.fetch_add(1, Ordering::Relaxed);
+                }
+            })
+        })
+        .collect();
+    for h in hs {
+        h.join().unwrap();
+    }
+    println!("visitas: {}", visitas.load(Ordering::Relaxed));
+}
+:::
+<p>Para um número simples, <code>AtomicUsize</code>, <code>AtomicBool</code> e afins são mais leves que um <code>Mutex</code>.</p>
+<div class="note warn"><strong>Deadlock:</strong> o compilador impede corridas de dados, mas não impede <em>deadlock</em>. Se a thread A tranca o mutex 1 e espera o 2, enquanto a B tranca o 2 e espera o 1, as duas ficam paradas para sempre. Regra prática: segure a trava pelo menor tempo possível e tranque vários mutex sempre na mesma ordem.</div>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para trancar o mutex:
+let mut v = m.[[lock]]().unwrap();
+:::
+::: ex
+Complete para dar um dono a mais a <code>dados</code> numa thread:
+let d = [[Arc]]::clone(&dados);
+:::
+::: mc 3
+Por que <code>Rc&lt;Mutex&lt;T&gt;&gt;</code> não compila com <code>thread::spawn</code>?
+- porque <code>Mutex</code> não funciona com números
+- porque falta <code>move</code>
+- porque <code>Rc</code> não implementa <code>Send</code>
+- porque threads não podem ter variáveis
+:::
+::: mc 2
+Quando a trava de um <code>Mutex</code> é liberada?
+- quando se chama <code>unlock()</code>
+- quando o <code>MutexGuard</code> sai de escopo
+- quando o programa termina
+- depois de um segundo
+:::
+::: missao goal="src:Arc::new\(Mutex::new;;out:total: 400;;semerro"
+Quatro threads somam 100 cada uma num contador compartilhado. O código usa <code>Rc</code> e não compila. Troque para <code>Arc&lt;Mutex&lt;i32&gt;&gt;</code> e imprima <code>total: 400</code>.
+--- script
+use std::rc::Rc;
+use std::sync::Mutex;
+use std::thread;
+
+fn main() {
+    let total = Rc::new(Mutex::new(0));
+    let mut hs = vec![];
+    for _ in 0..4 {
+        let t = Rc::clone(&total);
+        hs.push(thread::spawn(move || {
+            for _ in 0..100 {
+                *t.lock().unwrap() += 1;
+            }
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    println!("total: {}", total.lock().unwrap());
+}
+--- solucao
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let total = Arc::new(Mutex::new(0));
+    let mut hs = vec![];
+    for _ in 0..4 {
+        let t = Arc::clone(&total);
+        hs.push(thread::spawn(move || {
+            for _ in 0..100 {
+                *t.lock().unwrap() += 1;
+            }
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    println!("total: {}", total.lock().unwrap());
+}
+:::
+::: missao goal="src:\.lock\(\)\.unwrap\(\)\.push;;out:[1, 4, 9];;semerro"
+Cada thread calcula o quadrado de um número. Faça cada uma guardar seu resultado no vetor compartilhado com <code>lock().unwrap().push(...)</code>. O <code>main</code> ordena e deve imprimir <code>[1, 4, 9]</code>.
+--- script
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let quadrados = Arc::new(Mutex::new(Vec::new()));
+    let mut hs = vec![];
+    for n in 1..=3 {
+        let q = Arc::clone(&quadrados);
+        hs.push(thread::spawn(move || {
+            let _ = (q, n * n);
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    let mut v: Vec<i32> = quadrados.lock().unwrap().clone();
+    v.sort();
+    println!("{:?}", v);
+}
+--- solucao
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+fn main() {
+    let quadrados = Arc::new(Mutex::new(Vec::new()));
+    let mut hs = vec![];
+    for n in 1..=3 {
+        let q = Arc::clone(&quadrados);
+        hs.push(thread::spawn(move || {
+            q.lock().unwrap().push(n * n);
+        }));
+    }
+    for h in hs {
+        h.join().unwrap();
+    }
+    let mut v: Vec<i32> = quadrados.lock().unwrap().clone();
+    v.sort();
+    println!("{:?}", v);
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>Mutex</code> deixa uma thread por vez acessar o dado; <code>lock()</code> tranca e o fim do escopo destranca.</li>
+<li><code>Rc</code> não é <code>Send</code>; entre threads use <code>Arc</code>.</li>
+<li><code>Arc&lt;Mutex&lt;T&gt;&gt;</code> é o padrão para estado compartilhado e modificável.</li>
+<li><code>RwLock</code> para muitas leituras; atômicos para contadores simples.</li>
+</ul>

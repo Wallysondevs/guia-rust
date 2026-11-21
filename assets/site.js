@@ -65,6 +65,11 @@ var NIVEIS = [
       ["box.html", "Box&lt;T&gt;"],
       ["rc.html", "Rc&lt;T&gt;"],
       ["refcell.html", "RefCell&lt;T&gt;"]
+    ]},
+    { grupo: "Concorrência", itens: [
+      ["threads.html", "Threads"],
+      ["canais.html", "Canais (mpsc)"],
+      ["arc-mutex.html", "Arc e Mutex"]
     ]}
   ]}
 ];

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canais em Rust — std::sync::mpsc, send, recv e vários produtores | Guia Rust</title>
+<meta name="description" content="Comunicação entre threads em Rust com canais mpsc: channel, send e recv, receber com for, vários produtores clonando o Sender, quando o canal fecha, try_recv, recv_timeout e sync_channel.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1><span class="hl">Canais</span>: mensagens entre threads</h1>
+
+<p class="intro">Em vez de várias threads mexerem no mesmo dado, elas podem <strong>trocar mensagens</strong>. Um canal tem duas pontas: quem envia (<code>Sender</code>, o <em>transmissor</em>) e quem recebe (<code>Receiver</code>). O módulo da biblioteca padrão é <code>std::sync::mpsc</code>: <em>multiple producer, single consumer</em> (vários produtores, um consumidor).</p>
+
+<hr>
+<h2>1. Primeiro canal</h2>
+<pre class="file" data-file="src/main.rs">use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        let msg = String::from("pedido 17 pronto");
+        tx.send(msg).unwrap();
+    });
+
+    let recebido = rx.recv().unwrap();
+    println!("recebi: {recebido}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/primeiro">$ cargo run
+   Compiling primeiro v0.1.0 (/home/ana/projetos/primeiro)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running `target/debug/primeiro`
+recebi: pedido 17 pronto</pre>
+<dl class="anatomy"><dt>mpsc::channel()</dt><dd>cria o canal e devolve <code>(Sender, Receiver)</code>; por costume, <code>tx</code> e <code>rx</code>.</dd><dt>tx.send(v)</dt><dd>envia <code>v</code>; a posse do valor vai junto.</dd><dt>rx.recv()</dt><dd>espera (bloqueia) até chegar uma mensagem.</dd></dl>
+
+<h3>send move o valor</h3>
+<pre class="file" data-file="src/main.rs">use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let msg = String::from("oi");
+        tx.send(msg).unwrap();
+        println!("enviei {msg}");
+    });
+    println!("{}", rx.recv().unwrap());
+}</pre>
+<pre class="term" data-cwd="~/projetos/depois-de-enviar">$ cargo run
+   Compiling depois-de-enviar v0.1.0 (/home/ana/projetos/depois-de-enviar)
+error[E0382]: borrow of moved value: `msg`
+ --&gt; src/main.rs:9:27
+  |
+7 |         let msg = String::from("oi");
+  |             --- move occurs because `msg` has type `String`, which does not implement the `Copy` trait
+8 |         tx.send(msg).unwrap();
+  |                 --- value moved here
+9 |         println!("enviei {msg}");
+  |                           ^^^ value borrowed here after move
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `depois-de-enviar` (bin "depois-de-enviar") due to 1 previous error</pre>
+<p>Depois de enviada, a <code>String</code> pertence a quem recebe. Usar de novo do lado de quem enviou é E0382: o compilador impede que duas threads mexam no mesmo valor.</p>
+
+<hr>
+<h2>2. Recebendo várias mensagens</h2>
+<pre class="file" data-file="src/main.rs">use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    thread::spawn(move || {
+        for etapa in ["baixando", "descompactando", "instalando"] {
+            tx.send(etapa).unwrap();
+            thread::sleep(Duration::from_millis(20));
+        }
+    });
+
+    for msg in rx {
+        println!("status: {msg}");
+    }
+    println!("canal fechado");
+}</pre>
+<pre class="term" data-cwd="~/projetos/varias">$ cargo run
+   Compiling varias v0.1.0 (/home/ana/projetos/varias)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running `target/debug/varias`
+status: baixando
+status: descompactando
+status: instalando
+canal fechado</pre>
+<p><code>for msg in rx</code> recebe até o canal <strong>fechar</strong>, o que acontece quando todos os <code>Sender</code> deixam de existir (aqui, quando a thread termina e <code>tx</code> sai de escopo).</p>
+
+<hr>
+<h2>3. Vários produtores</h2>
+<pre class="file" data-file="src/main.rs">use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+
+    for id in 1..=3 {
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let quadrado = id * id;
+            tx.send((id, quadrado)).unwrap();
+        });
+    }
+    drop(tx);
+
+    let mut resultados: Vec&lt;(i32, i32)&gt; = rx.iter().collect();
+    resultados.sort();
+    for (id, q) in resultados {
+        println!("trabalhador {id} mandou {q}");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/produtores">$ cargo run
+   Compiling produtores v0.1.0 (/home/ana/projetos/produtores)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running `target/debug/produtores`
+trabalhador 1 mandou 1
+trabalhador 2 mandou 4
+trabalhador 3 mandou 9</pre>
+<p>Cada thread recebe seu próprio clone do <code>Sender</code>. O <code>drop(tx)</code> é importante: o <code>tx</code> original também conta como produtor, e sem soltá-lo o canal nunca fecharia e o <code>collect</code> ficaria esperando para sempre. As mensagens chegam em ordem imprevisível; por isso o <code>sort</code>.</p>
+
+<hr>
+<h2>4. Sem bloquear: try_recv e recv_timeout</h2>
+<pre class="file" data-file="src/main.rs">use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::&lt;u32&gt;();
+
+    println!("{:?}", rx.try_recv());
+
+    let h = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(50));
+        tx.send(99).unwrap();
+    });
+
+    println!("{:?}", rx.recv_timeout(Duration::from_millis(5)));
+    println!("{:?}", rx.recv_timeout(Duration::from_secs(1)));
+    h.join().unwrap();
+    println!("{:?}", rx.try_recv());
+}</pre>
+<pre class="term" data-cwd="~/projetos/try-recv">$ cargo run
+   Compiling try-recv v0.1.0 (/home/ana/projetos/try-recv)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running `target/debug/try-recv`
+Err(Empty)
+Err(Timeout)
+Ok(99)
+Err(Disconnected)</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Método</th><th>Se não houver mensagem</th></tr>
+<tr><td><code>recv()</code></td><td>espera; <code>Err</code> só se o canal fechou</td></tr>
+<tr><td><code>try_recv()</code></td><td>volta na hora com <code>Err(Empty)</code>, ou <code>Err(Disconnected)</code> se fechou</td></tr>
+<tr><td><code>recv_timeout(d)</code></td><td>espera até <code>d</code>; depois <code>Err(Timeout)</code></td></tr>
+</table></div>
+<div class="note"><strong>sync_channel(n)</strong> cria um canal com espaço para no máximo <code>n</code> mensagens: quando ele enche, <code>send</code> espera. Útil para o produtor não andar muito à frente do consumidor.</div>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para criar um canal:</p><div class="ex-code">let (tx, rx) = mpsc::<input data-answer="channel" aria-label="resposta">();</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para enviar o número 5:</p><div class="ex-code">tx.<input data-answer="send" aria-label="resposta">(5).unwrap();</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Quando um <code>for msg in rx</code> termina?</p>
+<label><input type="radio" name="q1"> depois de 10 mensagens</label>
+<label><input type="radio" name="q1"> quando todos os <code>Sender</code> foram destruídos e o canal fechou</label>
+<label><input type="radio" name="q1"> quando a primeira mensagem chega</label>
+<label><input type="radio" name="q1"> nunca</label></div>
+<div class="mc" data-answer="1"><p class="mc-q">O que significa <code>mpsc</code>?</p>
+<label><input type="radio" name="q2"> vários produtores, um consumidor</label>
+<label><input type="radio" name="q2"> um produtor, vários consumidores</label>
+<label><input type="radio" name="q2"> memória protegida sem cópia</label>
+<label><input type="radio" name="q2"> mensagens processadas sem concorrência</label></div>
+<div class="trycmd" data-goal="src:tx\.send;;out:recebi: 7;;out:recebi: 8;;out:recebi: 9;;semerro">
+<p class="try-task"><strong>Missão:</strong> Faça a thread enviar os números 7, 8 e 9 pelo canal. O <code>main</code> já imprime cada um como <code>recebi: N</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::&lt;i32&gt;();
+    thread::spawn(move || {
+        let _ = tx;
+    });
+    for n in rx {
+        println!("recebi: {n}");
+    }
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel::&lt;i32&gt;();
+    thread::spawn(move || {
+        for n in 7..=9 {
+            tx.send(n).unwrap();
+        }
+    });
+    for n in rx {
+        println!("recebi: {n}");
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running `target/debug/missao`
+recebi: 7
+recebi: 8
+recebi: 9
+</pre>
+</div>
+<div class="trycmd" data-goal="src:drop\(tx\);;out:total: 60;;semerro">
+<p class="try-task"><strong>Missão:</strong> Três threads mandam 10, 20 e 30. O programa trava porque o canal nunca fecha. Conserte para imprimir <code>total: 60</code>.</p>
+<pre class="script" data-file="src/main.rs">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for v in [10, 20, 30] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(v).unwrap());
+    }
+    let total: i32 = rx.iter().sum();
+    println!("total: {total}");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+use std::sync::mpsc;
+use std::thread;
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for v in [10, 20, 30] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(v).unwrap());
+    }
+    drop(tx);
+    let total: i32 = rx.iter().sum();
+    println!("total: {total}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
+     Running `target/debug/missao`
+total: 60
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>mpsc::channel()</code> devolve <code>(tx, rx)</code>; <code>send</code> envia e move o valor, <code>recv</code> espera.</li>
+<li><code>for msg in rx</code> recebe até o canal fechar.</li>
+<li>Vários produtores: <code>tx.clone()</code> para cada thread, e <code>drop(tx)</code> no original.</li>
+<li><code>try_recv</code> e <code>recv_timeout</code> não ficam presos esperando.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
