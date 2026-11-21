@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crates em Rust — cargo add, Cargo.toml, crates.io, lib.rs e workspaces | Guia Rust</title>
+<meta name="description" content="O que é um crate, como adicionar dependências do crates.io com cargo add, o Cargo.lock, criar uma biblioteca com cargo new --lib, usar lib.rs e main.rs no mesmo pacote e dependências locais com path.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Crates e <span class="hl">dependências</span></h1>
+
+<p class="intro">Um <strong>crate</strong> é a unidade que o compilador compila: um programa (crate binário, com <code>main</code>) ou uma biblioteca (crate de biblioteca, sem <code>main</code>). Um <strong>pacote</strong> é o que o <code>cargo new</code> cria: um <code>Cargo.toml</code> com um ou mais crates. E o <strong>crates.io</strong> é o repositório público onde a comunidade publica bibliotecas.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A adicionar uma biblioteca do crates.io com <code>cargo add</code> e o papel do <code>Cargo.lock</code>.</li>
+<li>A ter <code>src/lib.rs</code> e <code>src/main.rs</code> no mesmo pacote.</li>
+<li>A usar uma biblioteca sua, de outra pasta, com <code>path</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Usando uma biblioteca do crates.io</h2>
+<p>A biblioteca padrão não tem gerador de números aleatórios. O crate mais usado para isso é o <code>rand</code>. O <code>cargo add</code> procura a versão mais nova e escreve no <code>Cargo.toml</code>:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let d: u32 = rand::random_range(1..=6);
+    println!("o dado deu {d}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/dado">$ cargo add rand
+    Updating crates.io index
+      Adding rand v0.10.4 to dependencies
+             Features:
+             + alloc
+             + std
+             + std_rng
+             + sys_rng
+             + thread_rng
+             - chacha
+             - log
+             - serde
+             - simd_support
+             - unbiased
+    Updating crates.io index
+     Locking 8 packages to highest Rust 1.100.0 compatible versions
+$ cat Cargo.toml
+[package]
+name = "dado"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.10.4"
+$ cargo run
+ Downloading crates ...
+  Downloaded rand_core v0.10.1
+  Downloaded getrandom v0.4.3
+  Downloaded cpufeatures v0.3.1
+  Downloaded chacha20 v0.10.2
+  Downloaded cfg-if v1.0.5
+  Downloaded rand v0.10.4
+  Downloaded libc v0.2.191
+   Compiling libc v0.2.191
+   Compiling getrandom v0.4.3
+   Compiling cfg-if v1.0.5
+   Compiling rand_core v0.10.1
+   Compiling cpufeatures v0.3.1
+   Compiling chacha20 v0.10.2
+   Compiling rand v0.10.4
+   Compiling dado v0.1.0 (/home/ana/projetos/dado)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.22s
+     Running `target/debug/dado`
+o dado deu 3</pre>
+<p>Na primeira compilação, o cargo baixou o <code>rand</code> e as dependências dele (<code>Downloaded …</code>) e compilou tudo. Nas próximas, só o seu código é recompilado. O número do dado vai ser diferente no seu computador, claro.</p>
+<dl class="anatomy"><dt>rand = "0.10.4"</dt><dd>“qualquer versão compatível com 0.10.4” (as regras do <em>versionamento semântico</em>).</dd><dt>Cargo.lock</dt><dd>arquivo gerado com as versões <strong>exatas</strong> usadas, para a compilação ser igual em qualquer máquina.</dd><dt>cargo update</dt><dd>atualiza o <code>Cargo.lock</code> para as versões compatíveis mais novas.</dd></dl>
+<div class="tip"><strong>Achando crates</strong><p>Procure em <code>crates.io</code> ou em <code>lib.rs</code>. A documentação de qualquer crate publicado fica em <code>docs.rs/nome-do-crate</code>. Alguns muito usados: <code>serde</code> (JSON e outros formatos), <code>clap</code> (argumentos de linha de comando), <code>regex</code>, <code>chrono</code> (datas) e <code>tokio</code> (programação assíncrona).</p></div>
+
+<hr>
+<h2>2. Biblioteca e programa no mesmo pacote</h2>
+<p>Se o pacote tem <code>src/lib.rs</code>, ele também é uma biblioteca, com o mesmo nome do pacote. O <code>main.rs</code> usa a biblioteca como se fosse um crate de fora. É o jeito comum de organizar: a lógica fica na biblioteca (fácil de testar) e o <code>main</code> só cuida da entrada e da saída.</p>
+<pre class="file" data-file="src/main.rs">use calculadora::{media, Estatisticas};
+
+fn main() {
+    let dados = [4.0, 8.0, 15.0, 16.0, 23.0, 42.0];
+    println!("média: {:.2}", media(&amp;dados));
+    let e = Estatisticas::de(&amp;dados);
+    println!("{:?}", e);
+}</pre>
+<pre class="file" data-file="src/lib.rs">//! Pequena biblioteca de estatística.
+
+/// Média aritmética de uma fatia de números.
+pub fn media(v: &amp;[f64]) -&gt; f64 {
+    v.iter().sum::&lt;f64&gt;() / v.len() as f64
+}
+
+#[derive(Debug)]
+pub struct Estatisticas {
+    pub minimo: f64,
+    pub maximo: f64,
+    pub media: f64,
+}
+
+impl Estatisticas {
+    pub fn de(v: &amp;[f64]) -&gt; Self {
+        let minimo = v.iter().cloned().fold(f64::INFINITY, f64::min);
+        let maximo = v.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        Estatisticas { minimo, maximo, media: media(v) }
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/calculadora">$ find src -type f | sort
+src/lib.rs
+src/main.rs
+$ cargo run
+   Compiling calculadora v0.1.0 (/home/ana/projetos/calculadora)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/calculadora`
+média: 18.00
+Estatisticas { minimo: 4.0, maximo: 42.0, media: 18.0 }</pre>
+<p>Os comentários <code>///</code> e <code>//!</code> são de documentação: <code>cargo doc --open</code> gera um site com eles, no mesmo formato do <code>docs.rs</code>.</p>
+
+<hr>
+<h2>3. Uma biblioteca sua, em outra pasta</h2>
+<p>Para reaproveitar uma biblioteca entre projetos, crie-a com <code>cargo new --lib</code> e aponte para a pasta com <code>path</code> no <code>Cargo.toml</code> de quem usa:</p>
+<pre class="term" data-cwd="~/projetos">$ rm -rf saudacao app-saudacao
+$ cargo new --lib saudacao
+    Creating library `saudacao` package
+note: see more `Cargo.toml` keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+$ cat saudacao/src/lib.rs
+pub fn add(left: u64, right: u64) -&gt; u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_works() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+}
+$ printf 'pub fn ola(nome: &amp;str) -&gt; String {\n    format!("Olá, {nome}!")\n}\n' &gt; saudacao/src/lib.rs
+$ cargo new app-saudacao
+    Creating binary (application) `app-saudacao` package
+note: see more `Cargo.toml` keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+$ cd app-saudacao
+$ cargo add --path ../saudacao
+      Adding saudacao (local) to dependencies
+     Locking 1 package to highest Rust 1.100.0 compatible version
+$ printf 'fn main() {\n    println!("{}", saudacao::ola("Ana"));\n}\n' &gt; src/main.rs
+$ cargo run
+   Compiling saudacao v0.1.0 (/home/ana/projetos/saudacao)
+   Compiling app-saudacao v0.1.0 (/home/ana/projetos/app-saudacao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/app-saudacao`
+Olá, Ana!</pre>
+<p>O <code>cargo new --lib</code> já cria uma função de exemplo com um teste (você vê testes mais adiante). O <code>cargo add --path</code> escreve no <code>Cargo.toml</code> algo como <code>saudacao = { path = "../saudacao" }</code>. Para projetos com várias partes que evoluem juntas, o cargo também tem <em>workspaces</em>: uma pasta com um <code>Cargo.toml</code> que lista vários pacotes e compila todos com um <code>target</code> só.</p>
+
+<hr>
+<h2>4. Quando dá errado: crate que não está no <code>Cargo.toml</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let d: u32 = rand::random_range(1..=6);
+    println!("{d}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/sem-dependencia">$ cargo run
+   Compiling sem-dependencia v0.1.0 (/home/ana/projetos/sem-dependencia)
+error[E0433]: cannot find module or crate `rand` in this scope
+ --&gt; src/main.rs:2:18
+  |
+2 |     let d: u32 = rand::random_range(1..=6);
+  |                  ^^^^ use of unresolved module or unlinked crate `rand`
+  |
+  = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `sem-dependencia` (bin "sem-dependencia") due to 1 previous error</pre>
+<p>Sem a linha no <code>Cargo.toml</code>, o compilador não sabe o que é <code>rand</code> (E0433). A correção é o <code>cargo add rand</code>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para adicionar o crate <code>serde</code> ao projeto:</p><div class="ex-code">$ cargo <input data-answer="add" aria-label="resposta"> serde</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para criar um projeto de biblioteca:</p><div class="ex-code">$ cargo new <input data-answer="--lib" aria-label="resposta"> utilidades</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Para que serve o <code>Cargo.lock</code>?</p>
+<label><input type="radio" name="q1"> Para trancar o projeto com senha</label>
+<label><input type="radio" name="q1"> Para guardar as versões exatas das dependências e repetir a mesma compilação em qualquer máquina</label>
+<label><input type="radio" name="q1"> Para listar os autores</label>
+<label><input type="radio" name="q1"> Para impedir o <code>cargo add</code></label></div>
+<div class="mc" data-answer="4"><p class="mc-q">Qual arquivo transforma um pacote em biblioteca?</p>
+<label><input type="radio" name="q2"> <code>src/main.rs</code></label>
+<label><input type="radio" name="q2"> <code>Cargo.lock</code></label>
+<label><input type="radio" name="q2"> <code>src/bin.rs</code></label>
+<label><input type="radio" name="q2"> <code>src/lib.rs</code></label></div>
+<div class="trycmd" data-goal="src:mod\s+estatistica;;src:pub\s+fn\s+mediana;;out:Mediana: 7">
+<p class="try-task"><strong>Missão:</strong> Simule uma pequena biblioteca num módulo: crie <code>mod estatistica</code> com <code>pub fn mediana(v: &amp;mut Vec&lt;i32&gt;) -&gt; i32</code> (ordene e pegue o do meio). Para <code>vec![9, 2, 7, 4, 11]</code>, imprima <code>Mediana: 7</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut v = vec![9, 2, 7, 4, 11];
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+mod estatistica {
+    pub fn mediana(v: &amp;mut Vec&lt;i32&gt;) -&gt; i32 {
+        v.sort();
+        v[v.len() / 2]
+    }
+}
+
+fn main() {
+    let mut v = vec![9, 2, 7, 4, 11];
+    println!("Mediana: {}", estatistica::mediana(&amp;mut v));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/missao`
+Mediana: 7
+</pre>
+</div>
+<div class="trycmd" data-goal="src:///;;src:pub\s+fn\s+fatorial;;out:10! = 3628800">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>pub fn fatorial(n: u64) -&gt; u64</code> com um comentário de documentação <code>///</code> acima dela, e imprima <code>10! = 3628800</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+/// Calcula n! (n fatorial) de forma iterativa.
+pub fn fatorial(n: u64) -&gt; u64 {
+    (1..=n).product()
+}
+
+fn main() {
+    println!("10! = {}", fatorial(10));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+10! = 3628800
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Crate = unidade de compilação (binário ou biblioteca); pacote = <code>Cargo.toml</code> + crates.</li>
+<li><code>cargo add nome</code> adiciona do crates.io; o <code>Cargo.lock</code> fixa as versões exatas.</li>
+<li><code>src/lib.rs</code> faz do pacote uma biblioteca; <code>path = "../pasta"</code> usa uma biblioteca local.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

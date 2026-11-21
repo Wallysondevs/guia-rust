@@ -43,6 +43,10 @@ var NIVEIS = [
       ["vec.html", "Vetores (Vec)"],
       ["strings.html", "Strings"],
       ["hashmap.html", "HashMap"]
+    ]},
+    { grupo: "Organizando o Código", itens: [
+      ["modulos.html", "Módulos (mod, pub, use)"],
+      ["crates.html", "Crates e dependências"]
     ]}
   ]}
 ];

@@ -1,0 +1,165 @@
+---
+slug: crates
+menu: Crates e dependências
+titulo: Crates em Rust — cargo add, Cargo.toml, crates.io, lib.rs e workspaces | Guia Rust
+desc: O que é um crate, como adicionar dependências do crates.io com cargo add, o Cargo.lock, criar uma biblioteca com cargo new --lib, usar lib.rs e main.rs no mesmo pacote e dependências locais com path.
+h1: Crates e <span class="hl">dependências</span>
+nivel: n2
+grupo: Organizando o Código
+---
+<p class="intro">Um <strong>crate</strong> é a unidade que o compilador compila: um programa (crate binário, com <code>main</code>) ou uma biblioteca (crate de biblioteca, sem <code>main</code>). Um <strong>pacote</strong> é o que o <code>cargo new</code> cria: um <code>Cargo.toml</code> com um ou mais crates. E o <strong>crates.io</strong> é o repositório público onde a comunidade publica bibliotecas.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A adicionar uma biblioteca do crates.io com <code>cargo add</code> e o papel do <code>Cargo.lock</code>.</li>
+<li>A ter <code>src/lib.rs</code> e <code>src/main.rs</code> no mesmo pacote.</li>
+<li>A usar uma biblioteca sua, de outra pasta, com <code>path</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. Usando uma biblioteca do crates.io</h2>
+<p>A biblioteca padrão não tem gerador de números aleatórios. O crate mais usado para isso é o <code>rand</code>. O <code>cargo add</code> procura a versão mais nova e escreve no <code>Cargo.toml</code>:</p>
+::: terminal dado projeto
+$ cargo add rand
+$ cat Cargo.toml
+$ cargo run
+--- codigo
+fn main() {
+    let d: u32 = rand::random_range(1..=6);
+    println!("o dado deu {d}");
+}
+:::
+<p>Na primeira compilação, o cargo baixou o <code>rand</code> e as dependências dele (<code>Downloaded …</code>) e compilou tudo. Nas próximas, só o seu código é recompilado. O número do dado vai ser diferente no seu computador, claro.</p>
+<dl class="anatomy"><dt>rand = "0.10.4"</dt><dd>“qualquer versão compatível com 0.10.4” (as regras do <em>versionamento semântico</em>).</dd><dt>Cargo.lock</dt><dd>arquivo gerado com as versões <strong>exatas</strong> usadas, para a compilação ser igual em qualquer máquina.</dd><dt>cargo update</dt><dd>atualiza o <code>Cargo.lock</code> para as versões compatíveis mais novas.</dd></dl>
+<div class="tip"><strong>Achando crates</strong><p>Procure em <code>crates.io</code> ou em <code>lib.rs</code>. A documentação de qualquer crate publicado fica em <code>docs.rs/nome-do-crate</code>. Alguns muito usados: <code>serde</code> (JSON e outros formatos), <code>clap</code> (argumentos de linha de comando), <code>regex</code>, <code>chrono</code> (datas) e <code>tokio</code> (programação assíncrona).</p></div>
+
+<hr>
+<h2>2. Biblioteca e programa no mesmo pacote</h2>
+<p>Se o pacote tem <code>src/lib.rs</code>, ele também é uma biblioteca, com o mesmo nome do pacote. O <code>main.rs</code> usa a biblioteca como se fosse um crate de fora. É o jeito comum de organizar: a lógica fica na biblioteca (fácil de testar) e o <code>main</code> só cuida da entrada e da saída.</p>
+::: terminal calculadora projeto
+$ find src -type f | sort
+$ cargo run
+--- codigo
+use calculadora::{media, Estatisticas};
+
+fn main() {
+    let dados = [4.0, 8.0, 15.0, 16.0, 23.0, 42.0];
+    println!("média: {:.2}", media(&dados));
+    let e = Estatisticas::de(&dados);
+    println!("{:?}", e);
+}
+--- arquivo src/lib.rs
+//! Pequena biblioteca de estatística.
+
+/// Média aritmética de uma fatia de números.
+pub fn media(v: &[f64]) -> f64 {
+    v.iter().sum::<f64>() / v.len() as f64
+}
+
+#[derive(Debug)]
+pub struct Estatisticas {
+    pub minimo: f64,
+    pub maximo: f64,
+    pub media: f64,
+}
+
+impl Estatisticas {
+    pub fn de(v: &[f64]) -> Self {
+        let minimo = v.iter().cloned().fold(f64::INFINITY, f64::min);
+        let maximo = v.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        Estatisticas { minimo, maximo, media: media(v) }
+    }
+}
+:::
+<p>Os comentários <code>///</code> e <code>//!</code> são de documentação: <code>cargo doc --open</code> gera um site com eles, no mesmo formato do <code>docs.rs</code>.</p>
+
+<hr>
+<h2>3. Uma biblioteca sua, em outra pasta</h2>
+<p>Para reaproveitar uma biblioteca entre projetos, crie-a com <code>cargo new --lib</code> e aponte para a pasta com <code>path</code> no <code>Cargo.toml</code> de quem usa:</p>
+::: terminal biblioteca cwd=~/projetos
+$ rm -rf saudacao app-saudacao
+$ cargo new --lib saudacao
+$ cat saudacao/src/lib.rs
+$ printf 'pub fn ola(nome: &str) -> String {\n    format!("Olá, {nome}!")\n}\n' > saudacao/src/lib.rs
+$ cargo new app-saudacao
+$ cd app-saudacao
+$ cargo add --path ../saudacao
+$ printf 'fn main() {\n    println!("{}", saudacao::ola("Ana"));\n}\n' > src/main.rs
+$ cargo run
+:::
+<p>O <code>cargo new --lib</code> já cria uma função de exemplo com um teste (você vê testes mais adiante). O <code>cargo add --path</code> escreve no <code>Cargo.toml</code> algo como <code>saudacao = { path = "../saudacao" }</code>. Para projetos com várias partes que evoluem juntas, o cargo também tem <em>workspaces</em>: uma pasta com um <code>Cargo.toml</code> que lista vários pacotes e compila todos com um <code>target</code> só.</p>
+
+<hr>
+<h2>4. Quando dá errado: crate que não está no <code>Cargo.toml</code></h2>
+::: exemplo sem-dependencia falha
+fn main() {
+    let d: u32 = rand::random_range(1..=6);
+    println!("{d}");
+}
+:::
+<p>Sem a linha no <code>Cargo.toml</code>, o compilador não sabe o que é <code>rand</code> (E0433). A correção é o <code>cargo add rand</code>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para adicionar o crate <code>serde</code> ao projeto:
+$ cargo [[add]] serde
+:::
+::: ex
+Complete para criar um projeto de biblioteca:
+$ cargo new [[--lib]] utilidades
+:::
+::: mc 2
+Para que serve o <code>Cargo.lock</code>?
+- Para trancar o projeto com senha
+- Para guardar as versões exatas das dependências e repetir a mesma compilação em qualquer máquina
+- Para listar os autores
+- Para impedir o <code>cargo add</code>
+:::
+::: mc 4
+Qual arquivo transforma um pacote em biblioteca?
+- <code>src/main.rs</code>
+- <code>Cargo.lock</code>
+- <code>src/bin.rs</code>
+- <code>src/lib.rs</code>
+:::
+::: missao goal="src:mod\s+estatistica;;src:pub\s+fn\s+mediana;;out:Mediana: 7"
+Simule uma pequena biblioteca num módulo: crie <code>mod estatistica</code> com <code>pub fn mediana(v: &amp;mut Vec&lt;i32&gt;) -&gt; i32</code> (ordene e pegue o do meio). Para <code>vec![9, 2, 7, 4, 11]</code>, imprima <code>Mediana: 7</code>.
+--- script
+fn main() {
+    let mut v = vec![9, 2, 7, 4, 11];
+}
+--- solucao
+mod estatistica {
+    pub fn mediana(v: &mut Vec<i32>) -> i32 {
+        v.sort();
+        v[v.len() / 2]
+    }
+}
+
+fn main() {
+    let mut v = vec![9, 2, 7, 4, 11];
+    println!("Mediana: {}", estatistica::mediana(&mut v));
+}
+:::
+::: missao goal="src:///;;src:pub\s+fn\s+fatorial;;out:10! = 3628800"
+Escreva <code>pub fn fatorial(n: u64) -&gt; u64</code> com um comentário de documentação <code>///</code> acima dela, e imprima <code>10! = 3628800</code>.
+--- script
+fn main() {
+}
+--- solucao
+/// Calcula n! (n fatorial) de forma iterativa.
+pub fn fatorial(n: u64) -> u64 {
+    (1..=n).product()
+}
+
+fn main() {
+    println!("10! = {}", fatorial(10));
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Crate = unidade de compilação (binário ou biblioteca); pacote = <code>Cargo.toml</code> + crates.</li>
+<li><code>cargo add nome</code> adiciona do crates.io; o <code>Cargo.lock</code> fixa as versões exatas.</li>
+<li><code>src/lib.rs</code> faz do pacote uma biblioteca; <code>path = "../pasta"</code> usa uma biblioteca local.</li>
+</ul>

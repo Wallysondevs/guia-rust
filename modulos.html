@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Módulos em Rust — mod, pub, use, caminhos e módulos em arquivos | Guia Rust</title>
+<meta name="description" content="Organizando código Rust em módulos: mod, privacidade por padrão e pub, caminhos com :: (crate, self, super), use para encurtar nomes e como separar módulos em arquivos (src/geometria.rs). Com o erro E0603 de item privado.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Módulos (<span class="hl">mod</span>, pub, use)</h1>
+
+<p class="intro">Quando o programa cresce, um arquivo só fica difícil de ler. <strong>Módulos</strong> dividem o código em partes com nome, como pastas numa gaveta. Em Rust, tudo dentro de um módulo é <strong>privado</strong> por padrão: só o que você marca com <code>pub</code> pode ser usado de fora.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li>A criar módulos com <code>mod</code> e a expor itens com <code>pub</code>.</li>
+<li>Caminhos com <code>::</code> (<code>crate::</code>, <code>super::</code>) e atalhos com <code>use</code>.</li>
+<li>A mover um módulo para o seu próprio arquivo.</li>
+</ul></div>
+
+<hr>
+<h2>1. Um módulo no mesmo arquivo</h2>
+<pre class="file" data-file="src/main.rs">mod geometria {
+    pub fn area_quadrado(lado: f64) -&gt; f64 {
+        lado * lado
+    }
+
+    pub fn area_circulo(raio: f64) -&gt; f64 {
+        PI_APROX * raio * raio
+    }
+
+    const PI_APROX: f64 = 3.14;
+}
+
+fn main() {
+    println!("{}", geometria::area_quadrado(3.0));
+    println!("{}", geometria::area_circulo(2.0));
+}</pre>
+<pre class="term" data-cwd="~/projetos/mod">$ cargo run
+   Compiling mod v0.1.0 (/home/ana/projetos/mod)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/mod`
+9
+12.56</pre>
+<p>As funções são <code>pub</code>, então o <code>main</code> pode chamá-las com <code>geometria::nome</code>. A constante <code>PI_APROX</code> é privada: só o próprio módulo a enxerga.</p>
+
+<hr>
+<h2>2. Quando dá errado: item privado</h2>
+<pre class="file" data-file="src/main.rs">mod banco {
+    pub fn saldo() -&gt; u32 {
+        calcular_juros(1000)
+    }
+
+    fn calcular_juros(valor: u32) -&gt; u32 {
+        valor + valor / 10
+    }
+}
+
+fn main() {
+    println!("{}", banco::saldo());
+    println!("{}", banco::calcular_juros(50));
+}</pre>
+<pre class="term" data-cwd="~/projetos/privado">$ cargo run
+   Compiling privado v0.1.0 (/home/ana/projetos/privado)
+error[E0603]: function `calcular_juros` is private
+  --&gt; src/main.rs:13:27
+   |
+13 |     println!("{}", banco::calcular_juros(50));
+   |                           ^^^^^^^^^^^^^^ private function
+   |
+note: the function `calcular_juros` is defined here
+  --&gt; src/main.rs:6:5
+   |
+ 6 |     fn calcular_juros(valor: u32) -&gt; u32 {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0603`.
+error: could not compile `privado` (bin "privado") due to 1 previous error</pre>
+<p>Erro <strong>E0603</strong>: <code>calcular_juros</code> é privada. Isso é útil: o módulo decide o que é “interface pública” e o que é detalhe interno, que pode mudar sem quebrar quem usa.</p>
+
+<hr>
+<h2>3. Structs: campos também são privados</h2>
+<pre class="file" data-file="src/main.rs">mod loja {
+    pub struct Produto {
+        pub nome: String,
+        preco_centavos: u32,
+    }
+
+    impl Produto {
+        pub fn new(nome: &amp;str, preco: f64) -&gt; Produto {
+            Produto { nome: nome.to_string(), preco_centavos: (preco * 100.0).round() as u32 }
+        }
+        pub fn preco(&amp;self) -&gt; String {
+            format!("R$ {},{:02}", self.preco_centavos / 100, self.preco_centavos % 100)
+        }
+    }
+}
+
+fn main() {
+    let p = loja::Produto::new("caneta", 2.5);
+    println!("{}: {}", p.nome, p.preco());
+}</pre>
+<pre class="term" data-cwd="~/projetos/struct-pub">$ cargo run
+   Compiling struct-pub v0.1.0 (/home/ana/projetos/struct-pub)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/struct-pub`
+caneta: R$ 2,50</pre>
+<p>Um <code>pub struct</code> não torna os campos públicos: cada campo precisa do seu <code>pub</code>. Com o preço privado, só o módulo decide como ele é guardado (aqui, em centavos), e quem usa passa pelo <code>new</code> e pelo método <code>preco</code>.</p>
+
+<hr>
+<h2>4. <code>use</code> e caminhos</h2>
+<pre class="file" data-file="src/main.rs">mod escola {
+    pub mod notas {
+        pub fn media(v: &amp;[f64]) -&gt; f64 {
+            v.iter().sum::&lt;f64&gt;() / v.len() as f64
+        }
+
+        pub fn situacao(v: &amp;[f64]) -&gt; &amp;'static str {
+            if media(v) &gt;= super::MEDIA_MINIMA { "aprovado" } else { "reprovado" }
+        }
+    }
+
+    pub const MEDIA_MINIMA: f64 = 7.0;
+}
+
+use escola::notas::{media, situacao};
+use std::collections::HashMap as Mapa;
+
+fn main() {
+    let ana = [8.0, 6.5, 9.0];
+    println!("média {:.2}: {}", media(&amp;ana), situacao(&amp;ana));
+    println!("pelo caminho completo: {:.1}", crate::escola::notas::media(&amp;[5.0, 6.0]));
+    let mut m: Mapa&lt;&amp;str, u32&gt; = Mapa::new();
+    m.insert("x", 1);
+    println!("{:?}", m);
+}</pre>
+<pre class="term" data-cwd="~/projetos/use">$ cargo run
+   Compiling use v0.1.0 (/home/ana/projetos/use)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/use`
+média 7.83: aprovado
+pelo caminho completo: 5.5
+{"x": 1}</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Caminho</th><th>Significa</th></tr>
+<tr><td><code>crate::a::b</code></td><td>a partir da raiz do seu crate (caminho absoluto)</td></tr>
+<tr><td><code>super::x</code></td><td>no módulo “pai” do atual</td></tr>
+<tr><td><code>self::x</code></td><td>no módulo atual</td></tr>
+<tr><td><code>use a::b::{c, d};</code></td><td>traz vários nomes de uma vez</td></tr>
+<tr><td><code>use a::B as C;</code></td><td>traz com outro nome</td></tr>
+</table></div>
+
+<hr>
+<h2>5. Módulos em arquivos</h2>
+<p>Num projeto real, cada módulo vai para o seu arquivo. Em <code>src/main.rs</code>, a linha <code>mod geometria;</code> (com ponto e vírgula, sem chaves) diz ao compilador: “o conteúdo está em <code>src/geometria.rs</code>”. Um submódulo vai numa pasta com o nome do pai.</p>
+<pre class="file" data-file="src/main.rs">mod geometria;
+mod util;
+
+use geometria::formas::Retangulo;
+
+fn main() {
+    let r = Retangulo { largura: 3.0, altura: 2.0 };
+    println!("área do retângulo: {}", r.area());
+    println!("área do quadrado: {}", geometria::area_quadrado(4.0));
+    util::linha();
+}</pre>
+<pre class="file" data-file="src/geometria.rs">pub mod formas;
+
+pub fn area_quadrado(lado: f64) -&gt; f64 {
+    lado * lado
+}</pre>
+<pre class="file" data-file="src/geometria/formas.rs">pub struct Retangulo {
+    pub largura: f64,
+    pub altura: f64,
+}
+
+impl Retangulo {
+    pub fn area(&amp;self) -&gt; f64 {
+        self.largura * self.altura
+    }
+}</pre>
+<pre class="file" data-file="src/util.rs">pub fn linha() {
+    println!("{}", "-".repeat(20));
+}</pre>
+<pre class="term" data-cwd="~/projetos/arquivos">$ find src -type f | sort
+src/geometria.rs
+src/geometria/formas.rs
+src/main.rs
+src/util.rs
+$ cargo run
+   Compiling arquivos v0.1.0 (/home/ana/projetos/arquivos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/arquivos`
+área do retângulo: 6
+área do quadrado: 16
+--------------------</pre>
+<p>A estrutura de arquivos espelha a de módulos: <code>geometria</code> está em <code>src/geometria.rs</code>, e o submódulo <code>geometria::formas</code> está em <code>src/geometria/formas.rs</code>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para que a função possa ser usada fora do módulo:</p><div class="ex-code">mod util { <input data-answer="pub" aria-label="resposta"> fn ajuda() {} }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete o caminho para o módulo pai:</p><div class="ex-code">let x = <input data-answer="super" aria-label="resposta">::CONSTANTE;</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Em qual arquivo o compilador procura o conteúdo de <code>mod banco;</code> declarado em <code>src/main.rs</code>?</p>
+<label><input type="radio" name="q1"> <code>banco/main.rs</code></label>
+<label><input type="radio" name="q1"> <code>lib/banco.rs</code></label>
+<label><input type="radio" name="q1"> <code>src/banco.rs</code> (ou <code>src/banco/mod.rs</code>)</label>
+<label><input type="radio" name="q1"> Em lugar nenhum: precisa das chaves</label></div>
+<div class="mc" data-answer="2"><p class="mc-q">Num <code>pub struct</code>, os campos são…</p>
+<label><input type="radio" name="q2"> públicos automaticamente</label>
+<label><input type="radio" name="q2"> privados, a não ser que cada um tenha <code>pub</code></label>
+<label><input type="radio" name="q2"> sempre somente leitura</label>
+<label><input type="radio" name="q2"> proibidos</label></div>
+<div class="trycmd" data-goal="src:mod\s+conversor;;src:pub\s+fn;;out:100 km = 62.14 milhas">
+<p class="try-task"><strong>Missão:</strong> Crie o módulo <code>conversor</code> com a função pública <code>km_para_milhas(km: f64) -&gt; f64</code> (milhas = km × 0,621371). Chame de <code>main</code> e imprima <code>100 km = 62.14 milhas</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+mod conversor {
+    pub fn km_para_milhas(km: f64) -&gt; f64 {
+        km * 0.621371
+    }
+}
+
+fn main() {
+    println!("100 km = {:.2} milhas", conversor::km_para_milhas(100.0));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+100 km = 62.14 milhas
+</pre>
+</div>
+<div class="trycmd" data-goal="src:pub\s+fn\s+gerar;;out:código: AB-0042;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá E0603. Torne pública só a função que precisa ser (<code>gerar</code>), deixando <code>prefixo</code> privada, e rode.</p>
+<pre class="script" data-file="src/main.rs">
+mod codigo {
+    fn prefixo() -&gt; &amp;'static str {
+        "AB"
+    }
+
+    fn gerar(n: u32) -&gt; String {
+        format!("{}-{:04}", prefixo(), n)
+    }
+}
+
+fn main() {
+    println!("código: {}", codigo::gerar(42));
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+mod codigo {
+    fn prefixo() -&gt; &amp;'static str {
+        "AB"
+    }
+
+    pub fn gerar(n: u32) -&gt; String {
+        format!("{}-{:04}", prefixo(), n)
+    }
+}
+
+fn main() {
+    println!("código: {}", codigo::gerar(42));
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/missao`
+código: AB-0042
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\buse\s+\w+(::\w+)+;;src:mod\s+\w+\s*\{[\s\S]*mod\s+\w+;;out:Olá do submódulo!">
+<p class="try-task"><strong>Missão:</strong> Crie <code>mod saudacoes</code> com um submódulo <code>pub mod pt</code> que tem <code>pub fn ola()</code> imprimindo <code>Olá do submódulo!</code>. No <code>main</code>, traga a função com <code>use saudacoes::pt::ola;</code> e chame só <code>ola()</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    println!("Olá do submódulo!");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+mod saudacoes {
+    pub mod pt {
+        pub fn ola() {
+            println!("Olá do submódulo!");
+        }
+    }
+}
+
+use saudacoes::pt::ola;
+
+fn main() {
+    ola();
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+Olá do submódulo!
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>mod nome { … }</code> ou <code>mod nome;</code> (em <code>src/nome.rs</code>) cria um módulo.</li>
+<li>Tudo é privado por padrão; <code>pub</code> expõe funções, structs, campos e submódulos (E0603).</li>
+<li><code>use</code> encurta caminhos; <code>crate::</code>, <code>super::</code> e <code>self::</code> são pontos de partida.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
