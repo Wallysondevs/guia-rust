@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ownership em Rust — as três regras, move, clone e Copy | Guia Rust</title>
+<meta name="description" content="Ownership, o conceito central do Rust: cada valor tem um dono, só um por vez, e é liberado quando o dono sai de escopo. Move, clone, tipos Copy e o erro E0382 (borrow of moved value) explicado.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Ownership (<span class="hl">posse</span>)</h1>
+
+<p class="intro"><strong>Ownership</strong> (posse) é a ideia que faz o Rust ser seguro sem coletor de lixo. São três regras, conferidas pelo compilador. No começo elas causam muitos erros; depois de um tempo, viram um jeito natural de pensar em quem é responsável por cada dado.</p>
+<div class="note"><strong>As três regras</strong><ol>
+<li>Cada valor tem uma variável que é a sua <strong>dona</strong>.</li>
+<li>Só pode haver <strong>um</strong> dono por vez.</li>
+<li>Quando o dono sai de escopo, o valor é <strong>liberado</strong> (<em>drop</em>).</li>
+</ol></div>
+
+<hr>
+<h2>1. Escopo: o valor vive enquanto o dono vive</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    {
+        let s = String::from("olá");
+        println!("dentro: {s}");
+    } // aqui o s sai de escopo e a String é liberada
+    println!("fora do bloco");
+}</pre>
+<pre class="term" data-cwd="~/projetos/escopo">$ cargo run
+   Compiling escopo v0.1.0 (/home/ana/projetos/escopo)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/escopo`
+dentro: olá
+fora do bloco</pre>
+<p>Uma <code>String</code> guarda o texto na memória <strong>heap</strong> (a área de memória para dados de tamanho variável). Quando <code>s</code> sai de escopo, no <code>}</code>, o Rust libera essa memória automaticamente. Ninguém precisa chamar <code>free</code>.</p>
+
+<hr>
+<h2>2. Move: passar a posse adiante</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let s1 = String::from("Rust");
+    let s2 = s1;
+    println!("{s1}");
+    println!("{s2}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/move">$ cargo run
+   Compiling move v0.1.0 (/home/ana/projetos/move)
+error[E0382]: borrow of moved value: `s1`
+ --&gt; src/main.rs:4:16
+  |
+2 |     let s1 = String::from("Rust");
+  |         -- move occurs because `s1` has type `String`, which does not implement the `Copy` trait
+3 |     let s2 = s1;
+  |              -- value moved here
+4 |     println!("{s1}");
+  |                ^^ value borrowed here after move
+  |
+help: consider cloning the value if the performance cost is acceptable
+  |
+3 |     let s2 = s1.clone();
+  |                ++++++++
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `move` (bin "move") due to 1 previous error</pre>
+<p>Este é o erro mais famoso do Rust: <strong>E0382</strong>, <em>borrow of moved value</em>. O <code>let s2 = s1;</code> <strong>moveu</strong> a posse da String para <code>s2</code> (regra 2: um dono só). Depois disso, <code>s1</code> não vale mais nada. Por quê? Se os dois fossem donos, os dois tentariam liberar a mesma memória no fim (o bug <em>double free</em>, comum em C). O compilador explica tudo: onde o valor foi movido, onde foi usado depois, e por que (<code>String</code> não implementa o trait <code>Copy</code>).</p>
+
+<hr>
+<h2>3. <code>clone</code>: uma cópia de verdade</h2>
+<p>Se você quer dois valores independentes, peça uma cópia explícita com <code>.clone()</code>, como o próprio <code>help</code> sugeriu:</p>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let s1 = String::from("Rust");
+    let s2 = s1.clone();
+    println!("s1 = {s1}, s2 = {s2}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/clone">$ cargo run
+   Compiling clone v0.1.0 (/home/ana/projetos/clone)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/clone`
+s1 = Rust, s2 = Rust</pre>
+<p>O <code>clone</code> copia o texto inteiro para outro lugar da memória. É explícito de propósito: quando você lê <code>.clone()</code>, sabe que ali há um custo.</p>
+
+<hr>
+<h2>4. Tipos <code>Copy</code>: números não se movem</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let a = 5;
+    let b = a;
+    println!("a = {a}, b = {b}");
+    let t = (1, 'x', true);
+    let u = t;
+    println!("{:?} {:?}", t, u);
+}</pre>
+<pre class="term" data-cwd="~/projetos/copy">$ cargo run
+   Compiling copy v0.1.0 (/home/ana/projetos/copy)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/copy`
+a = 5, b = 5
+(1, 'x', true) (1, 'x', true)</pre>
+<p>Inteiros, floats, <code>bool</code>, <code>char</code> e tuplas só com esses tipos são <strong>Copy</strong>: cabem inteiros na pilha (<em>stack</em>) e copiar é barato, então a atribuição copia em vez de mover. <code>String</code>, <code>Vec</code> e outros que guardam dados no heap <strong>não</strong> são Copy.</p>
+
+<hr>
+<h2>5. Funções também movem</h2>
+<pre class="file" data-file="src/main.rs">fn mostrar(texto: String) {
+    println!("mostrando: {texto}");
+} // texto é liberado aqui
+
+fn main() {
+    let s = String::from("dado");
+    mostrar(s);
+    mostrar(s);
+}</pre>
+<pre class="term" data-cwd="~/projetos/funcao-move">$ cargo run
+   Compiling funcao-move v0.1.0 (/home/ana/projetos/funcao-move)
+error[E0382]: use of moved value: `s`
+ --&gt; src/main.rs:8:13
+  |
+6 |     let s = String::from("dado");
+  |         - move occurs because `s` has type `String`, which does not implement the `Copy` trait
+7 |     mostrar(s);
+  |             - value moved here
+8 |     mostrar(s);
+  |             ^ value used here after move
+  |
+note: consider changing this parameter type in function `mostrar` to borrow instead if owning the value isn't necessary
+ --&gt; src/main.rs:1:19
+  |
+1 | fn mostrar(texto: String) {
+  |    -------        ^^^^^^ this parameter takes ownership of the value
+  |    |
+  |    in this function
+help: consider cloning the value if the performance cost is acceptable
+  |
+7 |     mostrar(s.clone());
+  |              ++++++++
+
+For more information about this error, try `rustc --explain E0382`.
+error: could not compile `funcao-move` (bin "funcao-move") due to 1 previous error</pre>
+<p>Passar uma <code>String</code> para uma função move a posse para o parâmetro. Quando a função termina, o valor é liberado, e <code>s</code> não pode ser usado de novo. Uma saída é a função <strong>devolver</strong> a posse:</p>
+<pre class="file" data-file="src/main.rs">fn mostrar(texto: String) -&gt; String {
+    println!("mostrando: {texto}");
+    texto
+}
+
+fn main() {
+    let s = String::from("dado");
+    let s = mostrar(s);
+    let s = mostrar(s);
+    println!("ainda tenho: {s}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/devolver">$ cargo run
+   Compiling devolver v0.1.0 (/home/ana/projetos/devolver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/devolver`
+mostrando: dado
+mostrando: dado
+ainda tenho: dado</pre>
+<p>Funciona, mas é trabalhoso ficar devolvendo tudo. Na próxima aula você vê o jeito certo: <strong>emprestar</strong> com <code>&amp;</code>, sem passar a posse.</p>
+
+<hr>
+<h2>6. Vendo o <em>drop</em> acontecer</h2>
+<p>Dá para observar a regra 3 implementando o trait <code>Drop</code> (você vê traits no Nível 2; aqui basta ler a saída):</p>
+<pre class="file" data-file="src/main.rs">struct Recurso(&amp;'static str);
+
+impl Drop for Recurso {
+    fn drop(&amp;mut self) {
+        println!("liberando {}", self.0);
+    }
+}
+
+fn main() {
+    let _a = Recurso("A");
+    {
+        let _b = Recurso("B");
+        println!("fim do bloco interno");
+    }
+    let c = Recurso("C");
+    drop(c);
+    println!("fim do main");
+}</pre>
+<pre class="term" data-cwd="~/projetos/drop">$ cargo run
+   Compiling drop v0.1.0 (/home/ana/projetos/drop)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/drop`
+fim do bloco interno
+liberando B
+liberando C
+fim do main
+liberando A</pre>
+<p>O <code>B</code> é liberado no fim do bloco; o <code>C</code>, na hora do <code>drop(c)</code> (a função <code>drop</code> recebe a posse e o valor morre ali); o <code>A</code>, só no fim do <code>main</code>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete para fazer uma cópia independente da String:</p><div class="ex-code">let b = a.<input data-answer="clone" aria-label="resposta">();</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Qual o código do erro “borrow of moved value”?</p><div class="ex-code">error<input data-answer="[E0382" aria-label="resposta">]: borrow of moved value</div></div>
+<div class="mc" data-answer="2"><p class="mc-q">Depois de <code>let b = a;</code>, com <code>a</code> sendo uma <code>String</code>, o que acontece com <code>a</code>?</p>
+<label><input type="radio" name="q1"> Continua valendo, com uma cópia</label>
+<label><input type="radio" name="q1"> Não pode mais ser usada: a posse foi movida para <code>b</code></label>
+<label><input type="radio" name="q1"> Vira uma String vazia</label>
+<label><input type="radio" name="q1"> O programa dá panic</label></div>
+<div class="mc" data-answer="4"><p class="mc-q">Qual destes tipos é <code>Copy</code>?</p>
+<label><input type="radio" name="q2"> <code>String</code></label>
+<label><input type="radio" name="q2"> <code>Vec&lt;i32&gt;</code></label>
+<label><input type="radio" name="q2"> <code>Box&lt;i32&gt;</code></label>
+<label><input type="radio" name="q2"> <code>i64</code></label></div>
+<div class="trycmd" data-goal="src:\.clone\(\);;out:original: verde;;out:cópia: verde;;semerro">
+<p class="try-task"><strong>Missão:</strong> O programa abaixo dá o erro E0382. Conserte-o com <code>.clone()</code> para imprimir as duas linhas: <code>original: verde</code> e <code>cópia: verde</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let cor = String::from("verde");
+    let outra = cor;
+    println!("original: {cor}");
+    println!("cópia: {outra}");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let cor = String::from("verde");
+    let outra = cor.clone();
+    println!("original: {cor}");
+    println!("cópia: {outra}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+original: verde
+cópia: verde
+</pre>
+</div>
+<div class="trycmd" data-goal="src:fn\s+gritar\s*\(\s*\w+\s*:\s*String\s*\)\s*-&gt;\s*String;;out:RUST!;;out:de volta: RUST!">
+<p class="try-task"><strong>Missão:</strong> Escreva <code>fn gritar(s: String) -&gt; String</code>, que imprime o texto e <strong>devolve a posse</strong> dele. Em <code>main</code>, chame com <code>"RUST!"</code>, guarde o retorno e imprima <code>de volta: RUST!</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let s = String::from("RUST!");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn gritar(s: String) -&gt; String {
+    println!("{s}");
+    s
+}
+
+fn main() {
+    let s = String::from("RUST!");
+    let s = gritar(s);
+    println!("de volta: {s}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/missao`
+RUST!
+de volta: RUST!
+</pre>
+</div>
+<div class="trycmd" data-goal="src:impl\s+Drop\s+for;;outre:^tchau, caixa 1$;;outre:^fim\n">
+<p class="try-task"><strong>Missão:</strong> Implemente <code>Drop</code> para a struct <code>Caixa(u32)</code>, imprimindo <code>tchau, caixa N</code>. Crie a caixa 1 no <code>main</code> e imprima <code>fim</code>. A saída deve mostrar <code>fim</code> e depois <code>tchau, caixa 1</code>.</p>
+<pre class="script" data-file="src/main.rs">
+struct Caixa(u32);
+
+fn main() {
+    let _c = Caixa(1);
+    println!("fim");
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+struct Caixa(u32);
+
+impl Drop for Caixa {
+    fn drop(&amp;mut self) {
+        println!("tchau, caixa {}", self.0);
+    }
+}
+
+fn main() {
+    let _c = Caixa(1);
+    println!("fim");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+fim
+tchau, caixa 1
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Cada valor tem um dono; só um por vez; quando o dono sai de escopo, o valor é liberado.</li>
+<li>Atribuir ou passar para função <strong>move</strong> a posse (E0382 se usar depois).</li>
+<li><code>.clone()</code> faz uma cópia explícita; tipos <code>Copy</code> (números, bool, char) são copiados sozinhos.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

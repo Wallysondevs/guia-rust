@@ -1,0 +1,211 @@
+---
+slug: ownership
+menu: Ownership (posse)
+titulo: Ownership em Rust — as três regras, move, clone e Copy | Guia Rust
+desc: Ownership, o conceito central do Rust: cada valor tem um dono, só um por vez, e é liberado quando o dono sai de escopo. Move, clone, tipos Copy e o erro E0382 (borrow of moved value) explicado.
+h1: Ownership (<span class="hl">posse</span>)
+nivel: n1
+grupo: Ownership
+---
+<p class="intro"><strong>Ownership</strong> (posse) é a ideia que faz o Rust ser seguro sem coletor de lixo. São três regras, conferidas pelo compilador. No começo elas causam muitos erros; depois de um tempo, viram um jeito natural de pensar em quem é responsável por cada dado.</p>
+<div class="note"><strong>As três regras</strong><ol>
+<li>Cada valor tem uma variável que é a sua <strong>dona</strong>.</li>
+<li>Só pode haver <strong>um</strong> dono por vez.</li>
+<li>Quando o dono sai de escopo, o valor é <strong>liberado</strong> (<em>drop</em>).</li>
+</ol></div>
+
+<hr>
+<h2>1. Escopo: o valor vive enquanto o dono vive</h2>
+::: exemplo escopo
+fn main() {
+    {
+        let s = String::from("olá");
+        println!("dentro: {s}");
+    } // aqui o s sai de escopo e a String é liberada
+    println!("fora do bloco");
+}
+:::
+<p>Uma <code>String</code> guarda o texto na memória <strong>heap</strong> (a área de memória para dados de tamanho variável). Quando <code>s</code> sai de escopo, no <code>}</code>, o Rust libera essa memória automaticamente. Ninguém precisa chamar <code>free</code>.</p>
+
+<hr>
+<h2>2. Move: passar a posse adiante</h2>
+::: exemplo move falha
+fn main() {
+    let s1 = String::from("Rust");
+    let s2 = s1;
+    println!("{s1}");
+    println!("{s2}");
+}
+:::
+<p>Este é o erro mais famoso do Rust: <strong>E0382</strong>, <em>borrow of moved value</em>. O <code>let s2 = s1;</code> <strong>moveu</strong> a posse da String para <code>s2</code> (regra 2: um dono só). Depois disso, <code>s1</code> não vale mais nada. Por quê? Se os dois fossem donos, os dois tentariam liberar a mesma memória no fim (o bug <em>double free</em>, comum em C). O compilador explica tudo: onde o valor foi movido, onde foi usado depois, e por que (<code>String</code> não implementa o trait <code>Copy</code>).</p>
+
+<hr>
+<h2>3. <code>clone</code>: uma cópia de verdade</h2>
+<p>Se você quer dois valores independentes, peça uma cópia explícita com <code>.clone()</code>, como o próprio <code>help</code> sugeriu:</p>
+::: exemplo clone
+fn main() {
+    let s1 = String::from("Rust");
+    let s2 = s1.clone();
+    println!("s1 = {s1}, s2 = {s2}");
+}
+:::
+<p>O <code>clone</code> copia o texto inteiro para outro lugar da memória. É explícito de propósito: quando você lê <code>.clone()</code>, sabe que ali há um custo.</p>
+
+<hr>
+<h2>4. Tipos <code>Copy</code>: números não se movem</h2>
+::: exemplo copy
+fn main() {
+    let a = 5;
+    let b = a;
+    println!("a = {a}, b = {b}");
+    let t = (1, 'x', true);
+    let u = t;
+    println!("{:?} {:?}", t, u);
+}
+:::
+<p>Inteiros, floats, <code>bool</code>, <code>char</code> e tuplas só com esses tipos são <strong>Copy</strong>: cabem inteiros na pilha (<em>stack</em>) e copiar é barato, então a atribuição copia em vez de mover. <code>String</code>, <code>Vec</code> e outros que guardam dados no heap <strong>não</strong> são Copy.</p>
+
+<hr>
+<h2>5. Funções também movem</h2>
+::: exemplo funcao-move falha
+fn mostrar(texto: String) {
+    println!("mostrando: {texto}");
+} // texto é liberado aqui
+
+fn main() {
+    let s = String::from("dado");
+    mostrar(s);
+    mostrar(s);
+}
+:::
+<p>Passar uma <code>String</code> para uma função move a posse para o parâmetro. Quando a função termina, o valor é liberado, e <code>s</code> não pode ser usado de novo. Uma saída é a função <strong>devolver</strong> a posse:</p>
+::: exemplo devolver
+fn mostrar(texto: String) -> String {
+    println!("mostrando: {texto}");
+    texto
+}
+
+fn main() {
+    let s = String::from("dado");
+    let s = mostrar(s);
+    let s = mostrar(s);
+    println!("ainda tenho: {s}");
+}
+:::
+<p>Funciona, mas é trabalhoso ficar devolvendo tudo. Na próxima aula você vê o jeito certo: <strong>emprestar</strong> com <code>&amp;</code>, sem passar a posse.</p>
+
+<hr>
+<h2>6. Vendo o <em>drop</em> acontecer</h2>
+<p>Dá para observar a regra 3 implementando o trait <code>Drop</code> (você vê traits no Nível 2; aqui basta ler a saída):</p>
+::: exemplo drop
+struct Recurso(&'static str);
+
+impl Drop for Recurso {
+    fn drop(&mut self) {
+        println!("liberando {}", self.0);
+    }
+}
+
+fn main() {
+    let _a = Recurso("A");
+    {
+        let _b = Recurso("B");
+        println!("fim do bloco interno");
+    }
+    let c = Recurso("C");
+    drop(c);
+    println!("fim do main");
+}
+:::
+<p>O <code>B</code> é liberado no fim do bloco; o <code>C</code>, na hora do <code>drop(c)</code> (a função <code>drop</code> recebe a posse e o valor morre ali); o <code>A</code>, só no fim do <code>main</code>.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete para fazer uma cópia independente da String:
+let b = a.[[clone]]();
+:::
+::: ex
+Qual o código do erro “borrow of moved value”?
+error[[[E0382]]]: borrow of moved value
+:::
+::: mc 2
+Depois de <code>let b = a;</code>, com <code>a</code> sendo uma <code>String</code>, o que acontece com <code>a</code>?
+- Continua valendo, com uma cópia
+- Não pode mais ser usada: a posse foi movida para <code>b</code>
+- Vira uma String vazia
+- O programa dá panic
+:::
+::: mc 4
+Qual destes tipos é <code>Copy</code>?
+- <code>String</code>
+- <code>Vec&lt;i32&gt;</code>
+- <code>Box&lt;i32&gt;</code>
+- <code>i64</code>
+:::
+::: missao goal="src:\.clone\(\);;out:original: verde;;out:cópia: verde;;semerro"
+O programa abaixo dá o erro E0382. Conserte-o com <code>.clone()</code> para imprimir as duas linhas: <code>original: verde</code> e <code>cópia: verde</code>.
+--- script
+fn main() {
+    let cor = String::from("verde");
+    let outra = cor;
+    println!("original: {cor}");
+    println!("cópia: {outra}");
+}
+--- solucao
+fn main() {
+    let cor = String::from("verde");
+    let outra = cor.clone();
+    println!("original: {cor}");
+    println!("cópia: {outra}");
+}
+:::
+::: missao goal="src:fn\s+gritar\s*\(\s*\w+\s*:\s*String\s*\)\s*->\s*String;;out:RUST!;;out:de volta: RUST!"
+Escreva <code>fn gritar(s: String) -&gt; String</code>, que imprime o texto e <strong>devolve a posse</strong> dele. Em <code>main</code>, chame com <code>"RUST!"</code>, guarde o retorno e imprima <code>de volta: RUST!</code>.
+--- script
+fn main() {
+    let s = String::from("RUST!");
+}
+--- solucao
+fn gritar(s: String) -> String {
+    println!("{s}");
+    s
+}
+
+fn main() {
+    let s = String::from("RUST!");
+    let s = gritar(s);
+    println!("de volta: {s}");
+}
+:::
+::: missao goal="src:impl\s+Drop\s+for;;outre:^tchau, caixa 1$;;outre:^fim\n"
+Implemente <code>Drop</code> para a struct <code>Caixa(u32)</code>, imprimindo <code>tchau, caixa N</code>. Crie a caixa 1 no <code>main</code> e imprima <code>fim</code>. A saída deve mostrar <code>fim</code> e depois <code>tchau, caixa 1</code>.
+--- script
+struct Caixa(u32);
+
+fn main() {
+    let _c = Caixa(1);
+    println!("fim");
+}
+--- solucao
+struct Caixa(u32);
+
+impl Drop for Caixa {
+    fn drop(&mut self) {
+        println!("tchau, caixa {}", self.0);
+    }
+}
+
+fn main() {
+    let _c = Caixa(1);
+    println!("fim");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li>Cada valor tem um dono; só um por vez; quando o dono sai de escopo, o valor é liberado.</li>
+<li>Atribuir ou passar para função <strong>move</strong> a posse (E0382 se usar depois).</li>
+<li><code>.clone()</code> faz uma cópia explícita; tipos <code>Copy</code> (números, bool, char) são copiados sozinhos.</li>
+</ul>

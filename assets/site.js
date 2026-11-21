@@ -18,7 +18,11 @@ var NIVEIS = [
     { grupo: "Fundamentos", itens: [
       ["variaveis.html", "Variáveis e mut"],
       ["tipos.html", "Tipos de dados"],
-      ["funcoes.html", "Funções"]
+      ["funcoes.html", "Funções"],
+      ["controle-fluxo.html", "Controle de fluxo"]
+    ]},
+    { grupo: "Ownership", itens: [
+      ["ownership.html", "Ownership (posse)"]
     ]}
   ]}
 ];

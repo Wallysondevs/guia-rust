@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>if, else, loop, while e for em Rust | Guia Rust</title>
+<meta name="description" content="Controle de fluxo em Rust: if e else (também como expressão), loop com break devolvendo valor, rótulos de laço, while, for com faixas 0..n e ..=, rev() e o erro de condição que não é bool.">
+<link rel="stylesheet" href="assets/style.css">
+<script>try{var t=localStorage.getItem("tema");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+<div class="layout">
+<nav class="sidebar" id="sidebar" aria-label="Tópicos"></nav>
+<main class="main">
+<div class="content">
+
+<div class="pager"></div>
+
+<h1>Controle de <span class="hl">fluxo</span></h1>
+
+<p class="intro">Controle de fluxo é decidir <strong>o que</strong> roda e <strong>quantas vezes</strong>. Rust tem <code>if</code>/<code>else</code> e três laços: <code>loop</code> (para sempre, até um <code>break</code>), <code>while</code> (enquanto a condição valer) e <code>for</code> (para cada item). Uma diferença para outras linguagens: <code>if</code> e <code>loop</code> são <strong>expressões</strong> e podem devolver valores.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li><code>if</code>, <code>else if</code>, <code>else</code> e o <code>if</code> que devolve valor.</li>
+<li><code>loop</code> com <code>break valor</code>, rótulos <code>'externo:</code>, <code>while</code> e <code>for</code> com faixas.</li>
+<li>O erro real quando a condição não é <code>bool</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>if</code>, <code>else if</code>, <code>else</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let temperatura = 31;
+    if temperatura &gt; 30 {
+        println!("calor");
+    } else if temperatura &gt; 18 {
+        println!("agradável");
+    } else {
+        println!("frio");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/if">$ cargo run
+   Compiling if v0.1.0 (/home/ana/projetos/if)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running `target/debug/if`
+calor</pre>
+<p>Não há parênteses em volta da condição, e as chaves são obrigatórias, mesmo com uma linha só.</p>
+
+<hr>
+<h2>2. Quando dá errado: condição que não é <code>bool</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let itens = 3;
+    if itens {
+        println!("tem itens");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/if-erro">$ cargo run
+   Compiling if-erro v0.1.0 (/home/ana/projetos/if-erro)
+error[E0308]: mismatched types
+ --&gt; src/main.rs:3:8
+  |
+3 |     if itens {
+  |        ^^^^^ expected `bool`, found integer
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `if-erro` (bin "if-erro") due to 1 previous error</pre>
+<p>Em C e em JavaScript, um número diferente de zero conta como “verdadeiro”. Em Rust, não: a condição precisa ser <code>bool</code>. Escreva a comparação: <code>if itens &gt; 0</code>.</p>
+
+<hr>
+<h2>3. <code>if</code> como expressão</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let idade = 17;
+    let situacao = if idade &gt;= 18 { "maior" } else { "menor" };
+    println!("{situacao} de idade");
+}</pre>
+<pre class="term" data-cwd="~/projetos/if-expr">$ cargo run
+   Compiling if-expr v0.1.0 (/home/ana/projetos/if-expr)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/if-expr`
+menor de idade</pre>
+<p>Os dois braços precisam devolver o <strong>mesmo tipo</strong>. Se um devolver texto e o outro número, é erro E0308 (<code>if and else have incompatible types</code>).</p>
+
+<hr>
+<h2>4. <code>loop</code> e <code>break</code> com valor</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut contador = 0;
+    let resultado = loop {
+        contador += 1;
+        if contador == 10 {
+            break contador * 2;
+        }
+    };
+    println!("resultado: {resultado}");
+}</pre>
+<pre class="term" data-cwd="~/projetos/loop">$ cargo run
+   Compiling loop v0.1.0 (/home/ana/projetos/loop)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/loop`
+resultado: 20</pre>
+<p>O <code>loop</code> repete para sempre; o <code>break</code> sai e pode levar um valor junto. O <code>continue</code> pula para a próxima volta.</p>
+
+<hr>
+<h2>5. Rótulos: sair de dois laços de uma vez</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    'externo: for i in 1..=3 {
+        for j in 1..=3 {
+            if i * j == 4 {
+                println!("achei {i} x {j} = 4");
+                break 'externo;
+            }
+            println!("{i} x {j}");
+        }
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/rotulos">$ cargo run
+   Compiling rotulos v0.1.0 (/home/ana/projetos/rotulos)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/rotulos`
+1 x 1
+1 x 2
+1 x 3
+2 x 1
+achei 2 x 2 = 4</pre>
+
+<hr>
+<h2>6. <code>while</code></h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    let mut n = 3;
+    while n &gt; 0 {
+        println!("{n}...");
+        n -= 1;
+    }
+    println!("decolar!");
+}</pre>
+<pre class="term" data-cwd="~/projetos/while">$ cargo run
+   Compiling while v0.1.0 (/home/ana/projetos/while)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/while`
+3...
+2...
+1...
+decolar!</pre>
+
+<hr>
+<h2>7. <code>for</code> e faixas</h2>
+<pre class="file" data-file="src/main.rs">fn main() {
+    for i in 0..3 {
+        print!("{i} ");
+    }
+    println!();
+    for i in 1..=3 {
+        print!("{i} ");
+    }
+    println!();
+    for i in (1..=3).rev() {
+        print!("{i} ");
+    }
+    println!();
+    let frutas = ["maçã", "uva", "kiwi"];
+    for f in frutas {
+        println!("fruta: {f}");
+    }
+    for (i, f) in frutas.iter().enumerate() {
+        println!("{i}: {f}");
+    }
+}</pre>
+<pre class="term" data-cwd="~/projetos/for">$ cargo run
+   Compiling for v0.1.0 (/home/ana/projetos/for)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/for`
+0 1 2 
+1 2 3 
+3 2 1 
+fruta: maçã
+fruta: uva
+fruta: kiwi
+0: maçã
+1: uva
+2: kiwi</pre>
+<div class="table-wrap"><table class="ref">
+<tr><th>Faixa</th><th>Valores</th></tr>
+<tr><td><code>0..3</code></td><td>0, 1, 2 (o fim fica de fora)</td></tr>
+<tr><td><code>1..=3</code></td><td>1, 2, 3 (o fim entra)</td></tr>
+<tr><td><code>(1..=3).rev()</code></td><td>3, 2, 1</td></tr>
+<tr><td><code>(0..10).step_by(3)</code></td><td>0, 3, 6, 9</td></tr>
+</table></div>
+<p>O <code>for</code> é o laço mais usado em Rust: ele nunca erra o índice, porque não usa índice. O <code>enumerate()</code> entrega o par (posição, item) quando você precisa da posição.</p>
+
+<hr>
+<h2>Exercícios</h2>
+<div class="exercise"><h3>Exercício</h3><p>Complete a faixa que vai de 1 a 10, incluindo o 10:</p><div class="ex-code">for i in 1<input data-answer="..=" aria-label="resposta">10 { }</div></div>
+<div class="exercise"><h3>Exercício</h3><p>Complete para sair do laço devolvendo <code>x</code>:</p><div class="ex-code">let r = loop { <input data-answer="break" aria-label="resposta"> x; };</div></div>
+<div class="mc" data-answer="3"><p class="mc-q">Quantas vezes <code>for i in 0..5</code> repete?</p>
+<label><input type="radio" name="q1"> 4</label>
+<label><input type="radio" name="q1"> 6</label>
+<label><input type="radio" name="q1"> 5</label>
+<label><input type="radio" name="q1"> Para sempre</label></div>
+<div class="mc" data-answer="2"><p class="mc-q">O que está errado em <code>if 1 { }</code>?</p>
+<label><input type="radio" name="q2"> Faltam parênteses</label>
+<label><input type="radio" name="q2"> A condição precisa ser <code>bool</code>; um número não serve</label>
+<label><input type="radio" name="q2"> Falta o <code>else</code></label>
+<label><input type="radio" name="q2"> Nada, compila</label></div>
+<div class="trycmd" data-goal="src:\bfor\b;;src:%\s*2\s*==\s*0;;out:2 é par;;out:10 é par;;semerro">
+<p class="try-task"><strong>Missão:</strong> Use um <code>for</code> de 1 a 10 (incluindo o 10) e imprima só os números pares, no formato <code>2 é par</code>, <code>4 é par</code>… (teste com <code>% 2 == 0</code>).</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    // seu laço aqui
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    for n in 1..=10 {
+        if n % 2 == 0 {
+            println!("{n} é par");
+        }
+    }
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.09s
+     Running `target/debug/missao`
+2 é par
+4 é par
+6 é par
+8 é par
+10 é par
+</pre>
+</div>
+<div class="trycmd" data-goal="src:\bloop\b;;src:break\s+\w+;;out:Primeira potência de 2 acima de 1000: 1024">
+<p class="try-task"><strong>Missão:</strong> Use <code>loop</code> e <code>break valor</code>: comece com <code>p = 1</code> e vá dobrando até passar de 1000. Imprima <code>Primeira potência de 2 acima de 1000: 1024</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let mut p = 1;
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let mut p = 1;
+    let r = loop {
+        p *= 2;
+        if p &gt; 1000 {
+            break p;
+        }
+    };
+    println!("Primeira potência de 2 acima de 1000: {r}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Primeira potência de 2 acima de 1000: 1024
+</pre>
+</div>
+<div class="trycmd" data-goal="src:let\s+\w+\s*=\s*if\b;;out:Conceito: B">
+<p class="try-task"><strong>Missão:</strong> Com <code>let conceito = if … else if … else …;</code> (o <code>if</code> como expressão), transforme a nota <code>8</code> em conceito: 9 ou mais é <code>A</code>, 7 ou mais é <code>B</code>, abaixo disso <code>C</code>. Imprima <code>Conceito: B</code>.</p>
+<pre class="script" data-file="src/main.rs">
+fn main() {
+    let nota = 8;
+}
+</pre>
+<pre class="solucao" data-file="src/main.rs">
+fn main() {
+    let nota = 8;
+    let conceito = if nota &gt;= 9 { "A" } else if nota &gt;= 7 { "B" } else { "C" };
+    println!("Conceito: {conceito}");
+}
+</pre>
+<pre class="saida-ok" data-file="src/main.rs" hidden>
+   Compiling missao v0.1.0 (/home/ana/projetos/missao)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running `target/debug/missao`
+Conceito: B
+</pre>
+</div>
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>if</code> sem parênteses, com chaves; a condição é sempre <code>bool</code>.</li>
+<li><code>if</code> e <code>loop</code> são expressões: <code>let x = if … { } else { };</code>, <code>break valor</code>.</li>
+<li><code>while</code> repete enquanto a condição vale; <code>for x in coleção</code> percorre itens.</li>
+<li>Faixas: <code>a..b</code> (sem o fim), <code>a..=b</code> (com o fim), <code>.rev()</code>.</li>
+</ul>
+
+
+<div class="pager"></div>
+
+</div>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

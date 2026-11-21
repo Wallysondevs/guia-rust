@@ -1,0 +1,213 @@
+---
+slug: controle-fluxo
+menu: Controle de fluxo
+titulo: if, else, loop, while e for em Rust | Guia Rust
+desc: Controle de fluxo em Rust: if e else (também como expressão), loop com break devolvendo valor, rótulos de laço, while, for com faixas 0..n e ..=, rev() e o erro de condição que não é bool.
+h1: Controle de <span class="hl">fluxo</span>
+nivel: n1
+grupo: Fundamentos
+---
+<p class="intro">Controle de fluxo é decidir <strong>o que</strong> roda e <strong>quantas vezes</strong>. Rust tem <code>if</code>/<code>else</code> e três laços: <code>loop</code> (para sempre, até um <code>break</code>), <code>while</code> (enquanto a condição valer) e <code>for</code> (para cada item). Uma diferença para outras linguagens: <code>if</code> e <code>loop</code> são <strong>expressões</strong> e podem devolver valores.</p>
+<div class="note"><strong>Você vai aprender</strong><ul>
+<li><code>if</code>, <code>else if</code>, <code>else</code> e o <code>if</code> que devolve valor.</li>
+<li><code>loop</code> com <code>break valor</code>, rótulos <code>'externo:</code>, <code>while</code> e <code>for</code> com faixas.</li>
+<li>O erro real quando a condição não é <code>bool</code>.</li>
+</ul></div>
+
+<hr>
+<h2>1. <code>if</code>, <code>else if</code>, <code>else</code></h2>
+::: exemplo if
+fn main() {
+    let temperatura = 31;
+    if temperatura > 30 {
+        println!("calor");
+    } else if temperatura > 18 {
+        println!("agradável");
+    } else {
+        println!("frio");
+    }
+}
+:::
+<p>Não há parênteses em volta da condição, e as chaves são obrigatórias, mesmo com uma linha só.</p>
+
+<hr>
+<h2>2. Quando dá errado: condição que não é <code>bool</code></h2>
+::: exemplo if-erro falha
+fn main() {
+    let itens = 3;
+    if itens {
+        println!("tem itens");
+    }
+}
+:::
+<p>Em C e em JavaScript, um número diferente de zero conta como “verdadeiro”. Em Rust, não: a condição precisa ser <code>bool</code>. Escreva a comparação: <code>if itens &gt; 0</code>.</p>
+
+<hr>
+<h2>3. <code>if</code> como expressão</h2>
+::: exemplo if-expr
+fn main() {
+    let idade = 17;
+    let situacao = if idade >= 18 { "maior" } else { "menor" };
+    println!("{situacao} de idade");
+}
+:::
+<p>Os dois braços precisam devolver o <strong>mesmo tipo</strong>. Se um devolver texto e o outro número, é erro E0308 (<code>if and else have incompatible types</code>).</p>
+
+<hr>
+<h2>4. <code>loop</code> e <code>break</code> com valor</h2>
+::: exemplo loop
+fn main() {
+    let mut contador = 0;
+    let resultado = loop {
+        contador += 1;
+        if contador == 10 {
+            break contador * 2;
+        }
+    };
+    println!("resultado: {resultado}");
+}
+:::
+<p>O <code>loop</code> repete para sempre; o <code>break</code> sai e pode levar um valor junto. O <code>continue</code> pula para a próxima volta.</p>
+
+<hr>
+<h2>5. Rótulos: sair de dois laços de uma vez</h2>
+::: exemplo rotulos
+fn main() {
+    'externo: for i in 1..=3 {
+        for j in 1..=3 {
+            if i * j == 4 {
+                println!("achei {i} x {j} = 4");
+                break 'externo;
+            }
+            println!("{i} x {j}");
+        }
+    }
+}
+:::
+
+<hr>
+<h2>6. <code>while</code></h2>
+::: exemplo while
+fn main() {
+    let mut n = 3;
+    while n > 0 {
+        println!("{n}...");
+        n -= 1;
+    }
+    println!("decolar!");
+}
+:::
+
+<hr>
+<h2>7. <code>for</code> e faixas</h2>
+::: exemplo for
+fn main() {
+    for i in 0..3 {
+        print!("{i} ");
+    }
+    println!();
+    for i in 1..=3 {
+        print!("{i} ");
+    }
+    println!();
+    for i in (1..=3).rev() {
+        print!("{i} ");
+    }
+    println!();
+    let frutas = ["maçã", "uva", "kiwi"];
+    for f in frutas {
+        println!("fruta: {f}");
+    }
+    for (i, f) in frutas.iter().enumerate() {
+        println!("{i}: {f}");
+    }
+}
+:::
+<div class="table-wrap"><table class="ref">
+<tr><th>Faixa</th><th>Valores</th></tr>
+<tr><td><code>0..3</code></td><td>0, 1, 2 (o fim fica de fora)</td></tr>
+<tr><td><code>1..=3</code></td><td>1, 2, 3 (o fim entra)</td></tr>
+<tr><td><code>(1..=3).rev()</code></td><td>3, 2, 1</td></tr>
+<tr><td><code>(0..10).step_by(3)</code></td><td>0, 3, 6, 9</td></tr>
+</table></div>
+<p>O <code>for</code> é o laço mais usado em Rust: ele nunca erra o índice, porque não usa índice. O <code>enumerate()</code> entrega o par (posição, item) quando você precisa da posição.</p>
+
+<hr>
+<h2>Exercícios</h2>
+::: ex
+Complete a faixa que vai de 1 a 10, incluindo o 10:
+for i in 1[[..=]]10 { }
+:::
+::: ex
+Complete para sair do laço devolvendo <code>x</code>:
+let r = loop { [[break]] x; };
+:::
+::: mc 3
+Quantas vezes <code>for i in 0..5</code> repete?
+- 4
+- 6
+- 5
+- Para sempre
+:::
+::: mc 2
+O que está errado em <code>if 1 { }</code>?
+- Faltam parênteses
+- A condição precisa ser <code>bool</code>; um número não serve
+- Falta o <code>else</code>
+- Nada, compila
+:::
+::: missao goal="src:\bfor\b;;src:%\s*2\s*==\s*0;;out:2 é par;;out:10 é par;;semerro"
+Use um <code>for</code> de 1 a 10 (incluindo o 10) e imprima só os números pares, no formato <code>2 é par</code>, <code>4 é par</code>… (teste com <code>% 2 == 0</code>).
+--- script
+fn main() {
+    // seu laço aqui
+}
+--- solucao
+fn main() {
+    for n in 1..=10 {
+        if n % 2 == 0 {
+            println!("{n} é par");
+        }
+    }
+}
+:::
+::: missao goal="src:\bloop\b;;src:break\s+\w+;;out:Primeira potência de 2 acima de 1000: 1024"
+Use <code>loop</code> e <code>break valor</code>: comece com <code>p = 1</code> e vá dobrando até passar de 1000. Imprima <code>Primeira potência de 2 acima de 1000: 1024</code>.
+--- script
+fn main() {
+    let mut p = 1;
+}
+--- solucao
+fn main() {
+    let mut p = 1;
+    let r = loop {
+        p *= 2;
+        if p > 1000 {
+            break p;
+        }
+    };
+    println!("Primeira potência de 2 acima de 1000: {r}");
+}
+:::
+::: missao goal="src:let\s+\w+\s*=\s*if\b;;out:Conceito: B"
+Com <code>let conceito = if … else if … else …;</code> (o <code>if</code> como expressão), transforme a nota <code>8</code> em conceito: 9 ou mais é <code>A</code>, 7 ou mais é <code>B</code>, abaixo disso <code>C</code>. Imprima <code>Conceito: B</code>.
+--- script
+fn main() {
+    let nota = 8;
+}
+--- solucao
+fn main() {
+    let nota = 8;
+    let conceito = if nota >= 9 { "A" } else if nota >= 7 { "B" } else { "C" };
+    println!("Conceito: {conceito}");
+}
+:::
+
+<hr>
+<h2>Resumo</h2>
+<ul>
+<li><code>if</code> sem parênteses, com chaves; a condição é sempre <code>bool</code>.</li>
+<li><code>if</code> e <code>loop</code> são expressões: <code>let x = if … { } else { };</code>, <code>break valor</code>.</li>
+<li><code>while</code> repete enquanto a condição vale; <code>for x in coleção</code> percorre itens.</li>
+<li>Faixas: <code>a..b</code> (sem o fim), <code>a..=b</code> (com o fim), <code>.rev()</code>.</li>
+</ul>
